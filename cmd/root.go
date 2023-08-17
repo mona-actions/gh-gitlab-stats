@@ -22,7 +22,11 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		gitlabHostname := cmd.Flag("gitlab-hostname").Value.String()
 		gitlabToken := cmd.Flag("token").Value.String()
-		initClient(gitlabHostname, gitlabToken)
+		client := initClient(gitlabHostname, gitlabToken)
+		//getNamespaces(client)
+		getGroups(client)
+		getProjects(client)
+
 	},
 }
 
@@ -52,7 +56,7 @@ func init() {
 	rootCmd.MarkFlagRequired("token")
 }
 
-func initClient(hostname string, token string) {
+func initClient(hostname string, token string) *gitlab.Client {
 	var git *gitlab.Client
 	var err error
 	if hostname == "" {
@@ -64,12 +68,82 @@ func initClient(hostname string, token string) {
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
 	}
-	users, _, err := git.Users.ListUsers(&gitlab.ListUsersOptions{})
-	if err != nil {
-		log.Fatalf("Failed to list users: %v", err)
+	// users, _, err := git.Users.ListUsers(&gitlab.ListUsersOptions{})
+	// if err != nil {
+	// 	log.Fatalf("Failed to list users: %v", err)
+	// }
+
+	// for _, user := range users {
+	// 	log.Println("Found user", user.Name)
+	// }
+	return git
+}
+
+func getGroups(client *gitlab.Client) []*gitlab.Group {
+	var groups []*gitlab.Group
+	opt := &gitlab.ListGroupsOptions{
+		ListOptions: gitlab.ListOptions{
+			PerPage: 100,
+			Page:    1,
+		},
 	}
 
-	for _, user := range users {
-		log.Println("Found user", user.Name)
+	for {
+		g, response, err := client.Groups.ListGroups(opt)
+
+		if err != nil {
+			log.Fatalf("Failed to list groups: %v", err)
+		}
+		groups = append(groups, g...)
+
+		if response.NextPage == 0 {
+			break
+		}
+
+		opt.Page = response.NextPage
 	}
+
+	return groups
 }
+
+func getProjects(client *gitlab.Client) []*gitlab.Project {
+
+	var projects []*gitlab.Project
+	opt := &gitlab.ListProjectsOptions{
+		ListOptions: gitlab.ListOptions{
+			PerPage: 100,
+			Page:    1,
+		},
+	}
+
+	for {
+		p, response, err := client.Projects.ListProjects(opt)
+
+		if err != nil {
+			log.Fatalf("Failed to list projects: %v", err)
+		}
+		projects = append(projects, p...)
+
+		if response.NextPage == 0 {
+			break
+		}
+
+		opt.Page = response.NextPage
+	}
+
+	return projects
+}
+
+// Namespace will return all users and groups together
+// func getNamespaces(client *gitlab.Client) []*gitlab.Namespace {
+// 	namespaces, _, err := client.Namespaces.ListNamespaces(&gitlab.ListNamespacesOptions{})
+
+// 	if err != nil {
+// 		log.Fatalf("Failed to list projects: %v", err)
+// 	}
+
+// 	for _, namespaces := range namespaces {
+// 		log.Println("Found namespace", namespaces.Name)
+// 	}
+// 	return namespaces
+// }
