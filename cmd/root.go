@@ -5,11 +5,17 @@ package cmd
 
 import (
 	"encoding/csv"
+	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/mona-actions/gh-gitlab-stats/api/commits"
+	"github.com/mona-actions/gh-gitlab-stats/api/issues"
+	"github.com/mona-actions/gh-gitlab-stats/api/members"
+	"github.com/mona-actions/gh-gitlab-stats/api/mergerequests"
+	"github.com/mona-actions/gh-gitlab-stats/api/projects"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/xanzy/go-gitlab"
@@ -35,7 +41,6 @@ type ProjectSummary struct {
 	MRReviewCommentCount    int
 	CommitCommentCount      int
 	IssueCommentCount       int
-	IssueEventCount         int
 	ReleaseCount            int
 	BranchCount             int
 	TagCount                int
@@ -96,35 +101,62 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 	groupSpinnerSuccess.Success("Groups fetched successfully")
 
 	projectSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Projects")
-	gitlabProjects := getProjects(client)
+	gitlabProjects := projects.GetProjects(client)
 	projectSpinnerSuccess.Success("Projects fetched successfully")
 
 	for _, project := range gitlabProjects {
 		log.Println("Found project", project.Name)
 		commitSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Commits")
-		commits := getCommitActivity(project, client)
+		commits := commits.GetCommitActivity(project, client)
 		commitSpinnerSuccess.Success("Commits fetched successfully")
 
 		mergeRequestSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Merge Requests")
-		mergeRequests := getMergeRequests(project, client)
+		mergeRequests := mergerequests.GetMergeRequests(project, client)
+		var mergeRequestCommentCount int
+		for _, mergeRequest := range mergeRequests {
+			mergeRequestComments := mergerequests.GetMergeRequestComments(project, mergeRequest, client)
+			mergeRequestCommentCount += len(mergeRequestComments)
+		}
 		mergeRequestSpinnerSuccess.Success("Merge Requests fetched successfully")
 
+		projectMembersSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Members")
+		projectMembers := members.GetProjectMembers(project, client)
+		projectMembersSpinnerSuccess.Success("Project Members fetched successfully")
+
+		projectBranchesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Branches")
+		projectBranches := projects.GetProjectBranches(project, client)
+		projectBranchesSpinnerSuccess.Success("Project Branches fetched successfully")
+
+		projectMilestonesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Milestones")
+		projectMilestones := projects.GetProjectMilestones(project, client)
+		projectMilestonesSpinnerSuccess.Success("Project Milestones fetched successfully")
+
+		projectIssuesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Issues")
+		projectIssues := issues.GetProjectIssues(project, client)
+		var issueCommentCount int
+		for _, issue := range projectIssues {
+			issueComments := issues.GetIssueComments(project, issue, client)
+			issueCommentCount += len(issueComments)
+		}
+		fmt.Println("No. issue comments: ", issueCommentCount)
+		projectIssuesSpinnerSuccess.Success("Project Issues fetched successfully")
+
 		row := &ProjectSummary{
-			Namespace:   project.Namespace.Name,
-			ProjectName: project.Name,
-			IsEmpty:     project.EmptyRepo,
-			Last_Update: project.LastActivityAt,
-			RepoSize:    project.Statistics.RepositorySize,
-			IsFork:      project.ForkedFromProject != nil,
-			//CollaboratorCount:
-			//ProtectedBranchCount:
+			Namespace:            project.Namespace.Name,
+			ProjectName:          project.Name,
+			IsEmpty:              project.EmptyRepo,
+			Last_Update:          project.LastActivityAt,
+			RepoSize:             project.Statistics.RepositorySize,
+			IsFork:               project.ForkedFromProject != nil,
+			CollaboratorCount:    len(projectMembers),
+			ProtectedBranchCount: len(projectBranches),
 			//MergeRequestReviewCount:
-			//MilestoneCount:
-			//IssueCount:
-			MergeRequestCount: len(mergeRequests),
-			//MRReviewCommentCount:
-			CommitCommentCount: len(commits),
-			//IssueCommentCount:
+			MilestoneCount:       len(projectMilestones),
+			IssueCount:           len(projectIssues),
+			MergeRequestCount:    len(mergeRequests),
+			MRReviewCommentCount: mergeRequestCommentCount,
+			CommitCommentCount:   len(commits),
+			IssueCommentCount:    issueCommentCount,
 			//IssueEventCount:
 			//ReleaseCount:
 			//BranchCount:
@@ -184,94 +216,6 @@ func getGroups(client *gitlab.Client) []*gitlab.Group {
 	}
 
 	return groups
-}
-
-func getProjects(client *gitlab.Client) []*gitlab.Project {
-
-	var projects []*gitlab.Project
-	opt := &gitlab.ListProjectsOptions{
-		ListOptions: gitlab.ListOptions{
-			PerPage: 100,
-			Page:    1,
-		},
-		Statistics: gitlab.Bool(true),
-	}
-
-	for {
-		p, response, err := client.Projects.ListProjects(opt)
-
-		if err != nil {
-			log.Fatalf("Failed to list projects: %v", err)
-		}
-		projects = append(projects, p...)
-
-		if response.NextPage == 0 {
-			break
-		}
-
-		opt.Page = response.NextPage
-	}
-
-	return projects
-}
-
-func getCommitActivity(project *gitlab.Project, client *gitlab.Client) []*gitlab.Commit {
-	var commits []*gitlab.Commit
-	opt := &gitlab.ListCommitsOptions{
-		ListOptions: gitlab.ListOptions{
-			PerPage: 100,
-			Page:    1,
-		},
-	}
-	for {
-		c, response, err := client.Commits.ListCommits(project.ID, opt)
-		if err != nil {
-			log.Fatalf("Failed to list commits: %v %v", response, err)
-		}
-		commits = append(commits, c...)
-
-		if response.NextPage == 0 {
-			break
-		}
-
-		opt.Page = response.NextPage
-	}
-
-	//TODO: Need to decide if we would like to build a new struct for more readable Commit Summary or just use the gitlab.Commit struct
-	for _, commit := range commits {
-		log.Println("Found commit", commit.ID, commit.ProjectID, commit.Title)
-	}
-	return commits
-}
-
-func getMergeRequests(project *gitlab.Project, client *gitlab.Client) []*gitlab.MergeRequest {
-	var mergeRequests []*gitlab.MergeRequest
-	opt := &gitlab.ListProjectMergeRequestsOptions{
-		ListOptions: gitlab.ListOptions{
-			PerPage: 100,
-			Page:    1,
-		},
-	}
-
-	for {
-		p, response, err := client.MergeRequests.ListProjectMergeRequests(project.ID, opt)
-		if err != nil {
-			log.Fatalf("Failed to list merge requests: %v %v", response, err)
-		}
-		mergeRequests = append(mergeRequests, p...)
-
-		if response.NextPage == 0 {
-			break
-		}
-
-		opt.Page = response.NextPage
-	}
-
-	for _, mergeRequest := range mergeRequests {
-		log.Println("Found merge request: ", mergeRequest.ID, mergeRequest.Title, mergeRequest.Author.Username)
-	}
-
-	return mergeRequests
 }
 
 func createCSV(data [][]string, filename string) {
