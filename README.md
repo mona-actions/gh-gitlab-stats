@@ -90,4 +90,4 @@ TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Bran
 ## Caveats
 
 - Watch out for RateLimiting when running this tools. Extensive testing hasn't been done.
-- Some metrics are not available due to them not being available or need to be implemented. See in [columns](#columns) section.
+- Some metrics are not exported due to them not being available or need to be implemented. See in [columns](#columns) section.
