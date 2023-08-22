@@ -97,3 +97,29 @@ func GetProjectBranches(project *gitlab.Project, client *gitlab.Client) []*gitla
 
 	return branches
 }
+
+func GetProjectReleases(project *gitlab.Project, client *gitlab.Client) []*gitlab.Release {
+	var releases []*gitlab.Release
+	opt := &gitlab.ListReleasesOptions{
+		ListOptions: gitlab.ListOptions{
+			PerPage: 100,
+			Page:    1,
+		},
+	}
+
+	for {
+		p, response, err := client.Releases.ListReleases(project.ID, opt)
+		if err != nil {
+			log.Fatalf("Failed to list releases: %v %v", response, err)
+		}
+		releases = append(releases, p...)
+
+		if response.NextPage == 0 {
+			break
+		}
+
+		opt.Page = response.NextPage
+	}
+
+	return releases
+}

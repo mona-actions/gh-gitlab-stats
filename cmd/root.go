@@ -47,6 +47,7 @@ type ProjectSummary struct {
 	DiscussionCount         int
 	HasWiki                 bool
 	FullUrl                 string
+	MigrationIssue          bool
 }
 
 var (
@@ -83,17 +84,22 @@ func init() {
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
+	timestamp := time.Now().Format("2006-01-02-15-04-05")
 
 	rootCmd.Flags().StringP("gitlab-hostname", "s", "", "The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com")
 	rootCmd.MarkFlagRequired("gitlab-hostname")
 
 	rootCmd.Flags().StringP("token", "t", "", "The token to use to authenticate to the GitLab instance")
 	rootCmd.MarkFlagRequired("token")
+
+	rootCmd.Flags().StringP("output-file", "f", "gitlab-stats-"+timestamp+".csv", "The output file name to write the results to")
 }
 
 func getGitlabStats(cmd *cobra.Command, args []string) {
+
 	gitlabHostname := cmd.Flag("gitlab-hostname").Value.String()
 	gitlabToken := cmd.Flag("token").Value.String()
+	outputFileName := cmd.Flag("output-file").Value.String()
 	client := initClient(gitlabHostname, gitlabToken)
 	//getNamespaces(client)
 	groupSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Groups")
@@ -104,6 +110,33 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 	gitlabProjects := projects.GetProjects(client)
 	projectSpinnerSuccess.Success("Projects fetched successfully")
 
+	gitlabProjectsSummary := getProjectSummary(gitlabProjects, client)
+
+	projectsSummary = convertToCSVFormat(gitlabProjectsSummary)
+	createCSV(projectsSummary, outputFileName)
+}
+
+func initClient(hostname string, token string) *gitlab.Client {
+	var git *gitlab.Client
+	var err error
+	if hostname == "" {
+		git, err = gitlab.NewClient(token)
+	} else {
+		git, err = gitlab.NewClient(token, gitlab.WithBaseURL(hostname))
+	}
+
+	if err != nil {
+		log.Fatalf("Failed to create client: %v", err)
+	}
+	return git
+}
+
+func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) []*ProjectSummary {
+
+	isMigrationIssue := false
+	var issueCommentCount int
+	var mergeRequestCommentCount int
+
 	for _, project := range gitlabProjects {
 		log.Println("Found project", project.Name)
 		commitSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Commits")
@@ -112,7 +145,7 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 
 		mergeRequestSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Merge Requests")
 		mergeRequests := mergerequests.GetMergeRequests(project, client)
-		var mergeRequestCommentCount int
+
 		for _, mergeRequest := range mergeRequests {
 			mergeRequestComments := mergerequests.GetMergeRequestComments(project, mergeRequest, client)
 			mergeRequestCommentCount += len(mergeRequestComments)
@@ -133,7 +166,7 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 
 		projectIssuesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Issues")
 		projectIssues := issues.GetProjectIssues(project, client)
-		var issueCommentCount int
+
 		for _, issue := range projectIssues {
 			issueComments := issues.GetIssueComments(project, issue, client)
 			issueCommentCount += len(issueComments)
@@ -141,15 +174,25 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 		fmt.Println("No. issue comments: ", issueCommentCount)
 		projectIssuesSpinnerSuccess.Success("Project Issues fetched successfully")
 
+		projectReleasesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Releases")
+		projectReleases := projects.GetProjectReleases(project, client)
+		projectReleasesSpinnerSuccess.Success("Project Releases fetched successfully")
+
+		recordCount := len(commits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount
+		repoSizeInMB := (project.Statistics.RepositorySize / 1000000)
+		if recordCount > 60000 || repoSizeInMB > 1500 {
+			isMigrationIssue = true
+		}
 		row := &ProjectSummary{
-			Namespace:            project.Namespace.Name,
-			ProjectName:          project.Name,
-			IsEmpty:              project.EmptyRepo,
-			Last_Update:          project.LastActivityAt,
-			RepoSize:             project.Statistics.RepositorySize,
-			IsFork:               project.ForkedFromProject != nil,
-			CollaboratorCount:    len(projectMembers),
-			ProtectedBranchCount: len(projectBranches),
+			Namespace:         project.Namespace.Name,
+			ProjectName:       project.Name,
+			IsEmpty:           project.EmptyRepo,
+			Last_Update:       project.LastActivityAt,
+			IsFork:            project.ForkedFromProject != nil,
+			RepoSize:          repoSizeInMB,
+			RecordCount:       recordCount,
+			CollaboratorCount: len(projectMembers),
+			//ProtectedBranchCount: len(projectBranches),
 			//MergeRequestReviewCount:
 			MilestoneCount:       len(projectMilestones),
 			IssueCount:           len(projectIssues),
@@ -158,33 +201,18 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 			CommitCommentCount:   len(commits),
 			IssueCommentCount:    issueCommentCount,
 			//IssueEventCount:
-			//ReleaseCount:
-			//BranchCount:
-			TagCount: len(project.TagList),
+			ReleaseCount: len(projectReleases),
+			BranchCount:  len(projectBranches),
+			TagCount:     len(project.TagList),
 			//DiscussionCount:
-			HasWiki: project.WikiEnabled,
-			FullUrl: project.WebURL,
+			HasWiki:        project.WikiEnabled,
+			FullUrl:        project.WebURL,
+			MigrationIssue: isMigrationIssue,
 		}
 		gitlabProjectsSummary = append(gitlabProjectsSummary, row)
 	}
 
-	projectsSummary = convertToCSVFormat(gitlabProjectsSummary)
-	createCSV(projectsSummary, "projects.csv")
-}
-
-func initClient(hostname string, token string) *gitlab.Client {
-	var git *gitlab.Client
-	var err error
-	if hostname == "" {
-		git, err = gitlab.NewClient(token)
-	} else {
-		git, err = gitlab.NewClient(token, gitlab.WithBaseURL(hostname))
-	}
-
-	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
-	}
-	return git
+	return gitlabProjectsSummary
 }
 
 func getGroups(client *gitlab.Client) []*gitlab.Group {
@@ -241,7 +269,7 @@ func convertToCSVFormat(projects []*ProjectSummary) [][]string {
 	var rows [][]string
 
 	// Add header row
-	header := []string{"Namespace Name", "Name", "Empty Repo", "Last Activity At", "Repository Size", "Commit Count"}
+	header := []string{"Namespace Name", "Project_Name", "Is_Empty", "Last_Push", "Last_Update", "isFork", "Repository_Size(mb)", "Record_Count", "Collaborator_Count", "Protected_Branch_Count", "MR_Review_Count", "Milestone_Count", "Issue_Count", "MergeRequest_Count", "MR_Review_Comment_Count", "Commit_Comment_Count", "Issue_Comment_Count", "Issue_Event_Count", "Release_Count", "Project_Count", "Branch_Count", "Tag_Count", "Has Wiki", "Full_URL", "Migration_Issue"}
 	rows = append(rows, header)
 
 	// Add project rows
@@ -250,10 +278,27 @@ func convertToCSVFormat(projects []*ProjectSummary) [][]string {
 			project.Namespace,
 			project.ProjectName,
 			strconv.FormatBool(project.IsEmpty),
+			"N\\A",
 			project.Last_Update.Format(time.RFC3339),
+			strconv.FormatBool(project.IsFork),
 			strconv.FormatInt(project.RepoSize, 10),
-			strconv.Itoa(project.CommitCommentCount),
+			strconv.Itoa(project.RecordCount),
+			strconv.Itoa(project.CollaboratorCount),
+			"Protected Branch Count To be implemented",
+			" Mr Review Count To be implemented",
+			strconv.Itoa(project.MilestoneCount),
+			strconv.Itoa(project.IssueCount),
 			strconv.Itoa(project.MergeRequestCount),
+			strconv.Itoa(project.MRReviewCommentCount),
+			strconv.Itoa(project.CommitCommentCount),
+			strconv.Itoa(project.IssueCommentCount),
+			"N\\A",
+			strconv.Itoa(project.ReleaseCount),
+			"N\\A",
+			strconv.Itoa(project.BranchCount),
+			strconv.Itoa(project.TagCount),
+			strconv.FormatBool(project.HasWiki),
+			project.FullUrl,
 		}
 		rows = append(rows, row)
 	}
