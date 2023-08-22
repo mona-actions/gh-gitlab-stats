@@ -58,12 +58,6 @@ func GetProjectMilestones(project *gitlab.Project, client *gitlab.Client) []*git
 		opt.Page = response.NextPage
 	}
 
-	for _, milestone := range milestones {
-		log.Println("Found milestone: ", milestone.Title)
-	}
-
-	log.Println("Number of milestones: ", len(milestones))
-
 	return milestones
 
 }
@@ -89,10 +83,6 @@ func GetProjectBranches(project *gitlab.Project, client *gitlab.Client) []*gitla
 		}
 
 		opt.Page = response.NextPage
-	}
-
-	for _, branch := range branches {
-		log.Println("Found branch: ", branch.Name)
 	}
 
 	return branches

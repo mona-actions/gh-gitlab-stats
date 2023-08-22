@@ -29,9 +29,5 @@ func GetProjectMembers(project *gitlab.Project, client *gitlab.Client) []*gitlab
 		opt.Page = response.NextPage
 	}
 
-	for _, projectMember := range projectMembers {
-		log.Println("Found project member: ", projectMember.Name, projectMember.Username)
-	}
-
 	return projectMembers
 }

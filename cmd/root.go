@@ -5,7 +5,6 @@ package cmd
 
 import (
 	"encoding/csv"
-	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -112,8 +111,10 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 
 	gitlabProjectsSummary := getProjectSummary(gitlabProjects, client)
 
+	csvFileSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Creating CSV File")
 	projectsSummary = convertToCSVFormat(gitlabProjectsSummary)
 	createCSV(projectsSummary, outputFileName)
+	csvFileSpinnerSuccess.Success("CSV File created successfully")
 }
 
 func initClient(hostname string, token string) *gitlab.Client {
@@ -138,7 +139,6 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 	var mergeRequestCommentCount int
 
 	for _, project := range gitlabProjects {
-		log.Println("Found project", project.Name)
 		commitSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Commits")
 		commits := commits.GetCommitActivity(project, client)
 		commitSpinnerSuccess.Success("Commits fetched successfully")
@@ -171,7 +171,6 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			issueComments := issues.GetIssueComments(project, issue, client)
 			issueCommentCount += len(issueComments)
 		}
-		fmt.Println("No. issue comments: ", issueCommentCount)
 		projectIssuesSpinnerSuccess.Success("Project Issues fetched successfully")
 
 		projectReleasesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Releases")

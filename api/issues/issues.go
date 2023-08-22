@@ -1,7 +1,6 @@
 package issues
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/xanzy/go-gitlab"
@@ -30,12 +29,6 @@ func GetProjectIssues(project *gitlab.Project, client *gitlab.Client) []*gitlab.
 		opt.Page = response.NextPage
 	}
 
-	for _, issue := range issues {
-		log.Println("Found issue: ", issue.Title)
-	}
-
-	fmt.Println("No. issues: ", len(issues))
-
 	return issues
 }
 
@@ -62,7 +55,6 @@ func GetIssueComments(project *gitlab.Project, issue *gitlab.Issue, client *gitl
 		opt.Page = response.NextPage
 	}
 
-	log.Println("No. issue comments: ", len(issueComments))
 	return issueComments
 
 }

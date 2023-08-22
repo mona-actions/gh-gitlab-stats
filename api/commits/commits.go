@@ -29,8 +29,6 @@ func GetCommitActivity(project *gitlab.Project, client *gitlab.Client) []*gitlab
 	}
 
 	//TODO: Need to decide if we would like to build a new struct for more readable Commit Summary or just use the gitlab.Commit struct
-	for _, commit := range commits {
-		log.Println("Found commit", commit.ID, commit.ProjectID, commit.Title)
-	}
+
 	return commits
 }

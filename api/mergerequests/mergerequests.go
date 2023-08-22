@@ -29,10 +29,6 @@ func GetMergeRequests(project *gitlab.Project, client *gitlab.Client) []*gitlab.
 		opt.Page = response.NextPage
 	}
 
-	for _, mergeRequest := range mergeRequests {
-		log.Println("Found merge request: ", mergeRequest.ID, mergeRequest.Title, mergeRequest.Author.Username)
-	}
-
 	return mergeRequests
 }
 
@@ -58,8 +54,6 @@ func GetMergeRequestComments(project *gitlab.Project, mr *gitlab.MergeRequest, c
 
 		opt.Page = response.NextPage
 	}
-
-	log.Println("No. issue comments: ", len(mrComments))
 	return mrComments
 
 }
