@@ -139,43 +139,32 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 	var mergeRequestCommentCount int
 
 	for _, project := range gitlabProjects {
-		commitSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Commits")
-		commits := commits.GetCommitActivity(project, client)
-		commitSpinnerSuccess.Success("Commits fetched successfully")
+		repoWithOwner := project.Namespace.Name + "/" + project.Name
+		projectSummarySpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching " + repoWithOwner + " MetaData")
 
-		mergeRequestSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Merge Requests")
+		commits := commits.GetCommitActivity(project, client)
+
 		mergeRequests := mergerequests.GetMergeRequests(project, client)
 
 		for _, mergeRequest := range mergeRequests {
 			mergeRequestComments := mergerequests.GetMergeRequestComments(project, mergeRequest, client)
 			mergeRequestCommentCount += len(mergeRequestComments)
 		}
-		mergeRequestSpinnerSuccess.Success("Merge Requests fetched successfully")
 
-		projectMembersSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Members")
 		projectMembers := members.GetProjectMembers(project, client)
-		projectMembersSpinnerSuccess.Success("Project Members fetched successfully")
 
-		projectBranchesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Branches")
 		projectBranches := projects.GetProjectBranches(project, client)
-		projectBranchesSpinnerSuccess.Success("Project Branches fetched successfully")
 
-		projectMilestonesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Milestones")
 		projectMilestones := projects.GetProjectMilestones(project, client)
-		projectMilestonesSpinnerSuccess.Success("Project Milestones fetched successfully")
 
-		projectIssuesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Issues")
 		projectIssues := issues.GetProjectIssues(project, client)
 
 		for _, issue := range projectIssues {
 			issueComments := issues.GetIssueComments(project, issue, client)
 			issueCommentCount += len(issueComments)
 		}
-		projectIssuesSpinnerSuccess.Success("Project Issues fetched successfully")
 
-		projectReleasesSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Project Releases")
 		projectReleases := projects.GetProjectReleases(project, client)
-		projectReleasesSpinnerSuccess.Success("Project Releases fetched successfully")
 
 		recordCount := len(commits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount
 		repoSizeInMB := (project.Statistics.RepositorySize / 1000000)
@@ -209,6 +198,7 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			MigrationIssue: isMigrationIssue,
 		}
 		gitlabProjectsSummary = append(gitlabProjectsSummary, row)
+		projectSummarySpinnerSuccess.Success(repoWithOwner + " MetaData fetched successfully")
 	}
 
 	return gitlabProjectsSummary
