@@ -12,7 +12,7 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 
 | Name | Description | Required | Default |
 |------|-------------|----------|---------|
-| `gitlab-hostname` | The hostname of the GitLab instance to gather metrics from. E.g https://gitlab.company.com | Yes | N/A |
+| `hostname` | The hostname of the GitLab instance to gather metrics from. E.g https://gitlab.company.com | Yes | N/A |
 | `token` | The token to use to authenticate to the GitLab instance. | Yes | N/A |
 | `output-file` | The output file name to write the results to. | No | `gitlab-stats-YYYY-MM-DD-HH-MM-SS.csv` |
 
@@ -20,7 +20,7 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 
 1. Install dependencies: `go mod download`
 2. Build the tool: `go build .`
-3. Run the tool: `./gh-gitlab-stats --gitlab-hostname <hostname> --token <token> --output-file <filename>`
+3. Run the tool: `./gh-gitlab-stats --hostname <hostname> --token <token> --output-file <filename>`
 
 ## Usage
 
@@ -33,7 +33,7 @@ Usage:
   gh-gitlab-stats [flags]
 
 Flags:
-  -s, --gitlab-hostname string   The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com
+  -s, --hostname string   The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com
   -h, --help                     help for gh-gitlab-stats
   -f, --output-file string       The output file name to write the results to (default "gitlab-stats-YYYY-MM-DD-HH-MM-SS.csv")
   -t, --token string             The token to use to authenticate to the GitLab instance
