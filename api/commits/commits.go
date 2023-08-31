@@ -32,3 +32,29 @@ func GetCommitActivity(project *gitlab.Project, client *gitlab.Client) []*gitlab
 
 	return commits
 }
+
+func GetCommitComments(project *gitlab.Project, commit *gitlab.Commit, client *gitlab.Client) []*gitlab.CommitComment {
+	var commitComments []*gitlab.CommitComment
+	opt := &gitlab.GetCommitCommentsOptions{
+		PerPage: 100,
+		Page:    1,
+	}
+
+	for {
+		c, response, err := client.Commits.GetCommitComments(project.ID, commit.ShortID, opt)
+		if err != nil {
+			log.Fatalf("Failed to list commits: %v %v", response, err)
+		}
+
+		commitComments = append(commitComments, c...)
+
+		if response.NextPage == 0 {
+			break
+		}
+
+		opt.Page = response.NextPage
+	}
+	//fmt.Println(commitComments)
+
+	return commitComments
+}

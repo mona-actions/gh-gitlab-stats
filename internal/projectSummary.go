@@ -53,10 +53,15 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 
 	for _, project := range gitlabProjects {
 		var protectedBranchesCount int
+		var commitCommentCount int
 		repoWithOwner := project.PathWithNamespace
 		projectSummarySpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching " + repoWithOwner + " MetaData")
 
-		commits := commits.GetCommitActivity(project, client)
+		projectCommits := commits.GetCommitActivity(project, client)
+		for _, commit := range projectCommits {
+			commitComments := commits.GetCommitComments(project, commit, client)
+			commitCommentCount += len(commitComments)
+		}
 
 		mergeRequests := mergerequests.GetMergeRequests(project, client)
 
@@ -87,7 +92,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 
 		projectReleases := projects.GetProjectReleases(project, client)
 
-		recordCount := len(commits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount
+		recordCount := len(projectCommits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount
 		if project != nil && project.Statistics != nil {
 			repoSizeInMB = (project.Statistics.RepositorySize / 1000000)
 		} else {
@@ -114,7 +119,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			IssueCount:           len(projectIssues),
 			MergeRequestCount:    len(mergeRequests),
 			MRReviewCommentCount: mergeRequestCommentCount,
-			CommitCommentCount:   len(commits),
+			CommitCommentCount:   commitCommentCount,
 			IssueCommentCount:    issueCommentCount,
 			//IssueEventCount:
 			ReleaseCount: len(projectReleases),
