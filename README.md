@@ -58,7 +58,7 @@ TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Bran
 
 ### Columns
 
-- `Namespace_Name`: Namespace name of the Project
+- `Namespace_Name`: Namespace path of the Project
 - `Repo_Name`: Repository name
 - `Is_Empty`: Whether the repository is empty
 - `Last_Push`: **To be implemented**
@@ -67,7 +67,7 @@ TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Bran
 - `Repo_Size(mb)`: Size of the repository in megabytes
 - `Record_Count`: Number of database records this repository represents
 - `Collaborator_Count`: Number of users who are members to this repository
-- `Protected_Branch_Count`: **To be implemented**
+- `Protected_Branch_Count`: Number of protected branches
 - `MR_Review_Count`: **To be implemented**
 - `Milestone_Count`: Number of milestones
 - `Issue_Count`: Number of issues

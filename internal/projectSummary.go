@@ -53,7 +53,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 
 	for _, project := range gitlabProjects {
 		var protectedBranchesCount int
-		repoWithOwner := project.Namespace.Name + "/" + project.Name
+		repoWithOwner := project.PathWithNamespace
 		projectSummarySpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching " + repoWithOwner + " MetaData")
 
 		commits := commits.GetCommitActivity(project, client)
@@ -100,7 +100,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			isMigrationIssue = true
 		}
 		row := &ProjectSummary{
-			Namespace:            project.Namespace.Name,
+			Namespace:            project.Namespace.FullPath,
 			ProjectName:          project.Name,
 			IsEmpty:              project.EmptyRepo,
 			Last_Update:          project.LastActivityAt,
