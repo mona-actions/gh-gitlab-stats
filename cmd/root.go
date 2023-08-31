@@ -85,8 +85,8 @@ func init() {
 	// when this action is called directly.
 	timestamp := time.Now().Format("2006-01-02-15-04-05")
 
-	rootCmd.Flags().StringP("gitlab-hostname", "s", "", "The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com")
-	rootCmd.MarkFlagRequired("gitlab-hostname")
+	rootCmd.Flags().StringP("hostname", "s", "", "The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com")
+	rootCmd.MarkFlagRequired("hostname")
 
 	rootCmd.Flags().StringP("token", "t", "", "The token to use to authenticate to the GitLab instance")
 	rootCmd.MarkFlagRequired("token")
@@ -96,7 +96,7 @@ func init() {
 
 func getGitlabStats(cmd *cobra.Command, args []string) {
 
-	gitlabHostname := cmd.Flag("gitlab-hostname").Value.String()
+	gitlabHostname := cmd.Flag("hostname").Value.String()
 	gitlabToken := cmd.Flag("token").Value.String()
 	outputFileName := cmd.Flag("output-file").Value.String()
 	client := initClient(gitlabHostname, gitlabToken)
