@@ -140,12 +140,15 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 	var repoSizeInMB int64
 
 	for _, project := range gitlabProjects {
+		var protectedBranchesCount int
 		repoWithOwner := project.Namespace.Name + "/" + project.Name
 		projectSummarySpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching " + repoWithOwner + " MetaData")
 
 		commits := commits.GetCommitActivity(project, client)
 
 		mergeRequests := mergerequests.GetMergeRequests(project, client)
+
+		wikis := projects.GetProjectWikis(project, client)
 
 		for _, mergeRequest := range mergeRequests {
 			mergeRequestComments := mergerequests.GetMergeRequestComments(project, mergeRequest, client)
@@ -155,6 +158,11 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 		projectMembers := members.GetProjectMembers(project, client)
 
 		projectBranches := projects.GetProjectBranches(project, client)
+		for _, branch := range projectBranches {
+			if branch.Protected {
+				protectedBranchesCount++
+			}
+		}
 
 		projectMilestones := projects.GetProjectMilestones(project, client)
 
@@ -177,15 +185,15 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			isMigrationIssue = true
 		}
 		row := &ProjectSummary{
-			Namespace:         project.Namespace.Name,
-			ProjectName:       project.Name,
-			IsEmpty:           project.EmptyRepo,
-			Last_Update:       project.LastActivityAt,
-			IsFork:            project.ForkedFromProject != nil,
-			RepoSize:          repoSizeInMB,
-			RecordCount:       recordCount,
-			CollaboratorCount: len(projectMembers),
-			//ProtectedBranchCount: len(projectBranches),
+			Namespace:            project.Namespace.Name,
+			ProjectName:          project.Name,
+			IsEmpty:              project.EmptyRepo,
+			Last_Update:          project.LastActivityAt,
+			IsFork:               project.ForkedFromProject != nil,
+			RepoSize:             repoSizeInMB,
+			RecordCount:          recordCount,
+			CollaboratorCount:    len(projectMembers),
+			ProtectedBranchCount: protectedBranchesCount,
 			//MergeRequestReviewCount:
 			MilestoneCount:       len(projectMilestones),
 			IssueCount:           len(projectIssues),
@@ -198,7 +206,7 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			BranchCount:  len(projectBranches),
 			TagCount:     len(project.TagList),
 			//DiscussionCount:
-			HasWiki:        project.WikiEnabled,
+			HasWiki:        len(wikis) > 0,
 			FullUrl:        project.WebURL,
 			MigrationIssue: isMigrationIssue,
 		}
@@ -278,7 +286,7 @@ func convertToCSVFormat(projects []*ProjectSummary) [][]string {
 			strconv.FormatInt(project.RepoSize, 10),
 			strconv.Itoa(project.RecordCount),
 			strconv.Itoa(project.CollaboratorCount),
-			"Protected Branch Count To be implemented",
+			strconv.Itoa(project.ProtectedBranchCount),
 			" Mr Review Count To be implemented",
 			strconv.Itoa(project.MilestoneCount),
 			strconv.Itoa(project.IssueCount),

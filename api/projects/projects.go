@@ -113,3 +113,17 @@ func GetProjectReleases(project *gitlab.Project, client *gitlab.Client) []*gitla
 
 	return releases
 }
+
+func GetProjectWikis(project *gitlab.Project, client *gitlab.Client) []*gitlab.Wiki {
+	var wikis []*gitlab.Wiki
+	opt := &gitlab.ListWikisOptions{
+		WithContent: gitlab.Bool(true),
+	}
+	p, response, err := client.Wikis.ListWikis(project.ID, opt)
+	if err != nil {
+		log.Fatalf("Failed to list wikis: %v %v", response, err)
+	}
+	wikis = append(wikis, p...)
+
+	return wikis
+}
