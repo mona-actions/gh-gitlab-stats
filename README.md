@@ -7,6 +7,7 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 ## Requirements
 
 - Go 1.16 or higher
+- GitLab Server (tested on v16.2.4)
 
 ## Inputs
 
