@@ -32,6 +32,7 @@ type ProjectSummary struct {
 	CommitCommentCount      int
 	IssueCommentCount       int
 	ReleaseCount            int
+	IssueBoardCount         int
 	BranchCount             int
 	TagCount                int
 	DiscussionCount         int
@@ -84,6 +85,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 		projectMilestones := projects.GetProjectMilestones(project, client)
 
 		projectIssues := issues.GetProjectIssues(project, client)
+		projectIssueBoards := issues.GetIssueBoards(project, client)
 
 		for _, issue := range projectIssues {
 			issueComments := issues.GetIssueComments(project, issue, client)
@@ -92,7 +94,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 
 		projectReleases := projects.GetProjectReleases(project, client)
 
-		recordCount := len(projectCommits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount
+		recordCount := len(projectCommits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectIssueBoards) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount + commitCommentCount
 		if project != nil && project.Statistics != nil {
 			repoSizeInMB = (project.Statistics.RepositorySize / 1000000)
 		} else {
@@ -101,13 +103,11 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 		if recordCount > 60000 || repoSizeInMB > 1500 {
 			isMigrationIssue = true
 		}
-		if recordCount > 60000 || repoSizeInMB > 1500 {
-			isMigrationIssue = true
-		}
 		row := &ProjectSummary{
-			Namespace:            project.Namespace.FullPath,
-			ProjectName:          project.Name,
-			IsEmpty:              project.EmptyRepo,
+			Namespace:   project.Namespace.FullPath,
+			ProjectName: project.Name,
+			IsEmpty:     project.EmptyRepo,
+			//Last_Push:
 			Last_Update:          project.LastActivityAt,
 			IsFork:               project.ForkedFromProject != nil,
 			RepoSize:             repoSizeInMB,
@@ -122,9 +122,10 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			CommitCommentCount:   commitCommentCount,
 			IssueCommentCount:    issueCommentCount,
 			//IssueEventCount:
-			ReleaseCount: len(projectReleases),
-			BranchCount:  len(projectBranches),
-			TagCount:     len(project.TagList),
+			ReleaseCount:    len(projectReleases),
+			IssueBoardCount: len(projectIssueBoards),
+			BranchCount:     len(projectBranches),
+			TagCount:        len(project.TagList),
 			//DiscussionCount:
 			HasWiki:        len(wikis) > 0,
 			FullUrl:        project.WebURL,

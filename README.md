@@ -75,9 +75,9 @@ TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Bran
 - `MR_Review_Comment_Count`: **To be implemented**
 - `Commit_Comment_Count`: Number of commit comments
 - `Issue_Comment_Count`: Number of issue comments
-- `Issue_Event_Count`: Number of issues
+- `Issue_Event_Count`: "N\A"
 - `Release_Count`: Number of releases
-- `Project_Count`: "N\A"
+- `Issue_Board_Count`: Number of Issue Boards
 - `Branch_Count`: Number of branches
 - `Tag_Count`: Number of tags
 - `Discussion_Count`: "N\A"

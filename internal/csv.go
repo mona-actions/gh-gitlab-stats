@@ -30,7 +30,7 @@ func ConvertToCSVFormat(projects []*ProjectSummary) [][]string {
 	var rows [][]string
 
 	// Add header row
-	header := []string{"Namespace Name", "Project_Name", "Is_Empty", "Last_Push", "Last_Update", "isFork", "Repository_Size(mb)", "Record_Count", "Collaborator_Count", "Protected_Branch_Count", "MR_Review_Count", "Milestone_Count", "Issue_Count", "MergeRequest_Count", "MR_Review_Comment_Count", "Commit_Comment_Count", "Issue_Comment_Count", "Issue_Event_Count", "Release_Count", "Project_Count", "Branch_Count", "Tag_Count", "Discussion_Count", "Has Wiki", "Full_URL", "Migration_Issue"}
+	header := []string{"Namespace Name", "Project_Name", "Is_Empty", "Last_Push", "Last_Update", "isFork", "Repository_Size(mb)", "Record_Count", "Collaborator_Count", "Protected_Branch_Count", "MR_Review_Count", "Milestone_Count", "Issue_Count", "MergeRequest_Count", "MR_Review_Comment_Count", "Commit_Comment_Count", "Issue_Comment_Count", "Issue_Event_Count", "Release_Count", "Issue_Board_Count", "Branch_Count", "Tag_Count", "Discussion_Count", "Has Wiki", "Full_URL", "Migration_Issue"}
 	rows = append(rows, header)
 
 	// Add project rows
@@ -55,7 +55,7 @@ func ConvertToCSVFormat(projects []*ProjectSummary) [][]string {
 			strconv.Itoa(project.IssueCommentCount),
 			"N\\A",
 			strconv.Itoa(project.ReleaseCount),
-			"N\\A",
+			strconv.Itoa(project.IssueBoardCount),
 			strconv.Itoa(project.BranchCount),
 			strconv.Itoa(project.TagCount),
 			"N\\A",

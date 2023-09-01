@@ -58,3 +58,28 @@ func GetIssueComments(project *gitlab.Project, issue *gitlab.Issue, client *gitl
 	return issueComments
 
 }
+
+func GetIssueBoards(project *gitlab.Project, client *gitlab.Client) []*gitlab.IssueBoard {
+	var issueBoards []*gitlab.IssueBoard
+	opt := &gitlab.ListIssueBoardsOptions{
+		PerPage: 100,
+		Page:    1,
+	}
+
+	for {
+		p, response, err := client.Boards.ListIssueBoards(project.ID, opt)
+		if err != nil {
+			log.Fatalf("Failed to list issue boards: %v %v", response, err)
+		}
+		issueBoards = append(issueBoards, p...)
+
+		if response.NextPage == 0 {
+			break
+		}
+
+		opt.Page = response.NextPage
+	}
+
+	return issueBoards
+
+}
