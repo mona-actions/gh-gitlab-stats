@@ -12,7 +12,7 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 
 | Name | Description | Required | Default |
 |------|-------------|----------|---------|
-| `hostname` | The hostname of the GitLab instance to gather metrics from. E.g https://gitlab.company.com | Yes | N/A |
+| `hostname` | The hostname of the GitLab instance to gather metrics from. E.g `https://gitlab.company.com` | Yes | N/A |
 | `token` | The token to use to authenticate to the GitLab instance. | Yes | N/A |
 | `output-file` | The output file name to write the results to. | No | `gitlab-stats-YYYY-MM-DD-HH-MM-SS.csv` |
 
@@ -24,7 +24,7 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 
 ## Usage
 
-```
+```sh
 ./gh-gitlab-stats --help
 gh cli extension for analyzing GitLab Instance to get migration statistics of
               repositories, issues...
@@ -61,7 +61,7 @@ TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Bran
 - `Namespace_Name`: Namespace path of the Project
 - `Repo_Name`: Repository name
 - `Is_Empty`: Whether the repository is empty
-- `Last_Push`: **To be implemented**
+- `Last_Push`: Date/time when a push was last made to the default branch
 - `Last_Update`: Date/time when an update was last made
 - `isFork`: Whether the repository is a fork
 - `Repo_Size(mb)`: Size of the repository in megabytes
@@ -72,7 +72,7 @@ TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Bran
 - `Milestone_Count`: Number of milestones
 - `Issue_Count`: Number of issues
 - `MergeRequest_Count`: Number of Merge requests
-- `MR_Review_Comment_Count`: **To be implemented**
+- `MR_Review_Comment_Count`: Number of merge request comments
 - `Commit_Comment_Count`: Number of commit comments
 - `Issue_Comment_Count`: Number of issue comments
 - `Issue_Event_Count`: "N\A"

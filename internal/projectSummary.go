@@ -55,6 +55,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 	for _, project := range gitlabProjects {
 		var protectedBranchesCount int
 		var commitCommentCount int
+		var lastPush *time.Time
 		repoWithOwner := project.PathWithNamespace
 		projectSummarySpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching " + repoWithOwner + " MetaData")
 
@@ -62,6 +63,12 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 		for _, commit := range projectCommits {
 			commitComments := commits.GetCommitComments(project, commit, client)
 			commitCommentCount += len(commitComments)
+		}
+
+		if projectCommits != nil {
+			lastCommit := projectCommits[0]
+			lastPush = lastCommit.CommittedDate
+			//fmt.Println(lastCommit.CommittedDate, lastCommit.Title)
 		}
 
 		mergeRequests := mergerequests.GetMergeRequests(project, client)
@@ -104,10 +111,10 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			isMigrationIssue = true
 		}
 		row := &ProjectSummary{
-			Namespace:   project.Namespace.FullPath,
-			ProjectName: project.Name,
-			IsEmpty:     project.EmptyRepo,
-			//Last_Push:
+			Namespace:            project.Namespace.FullPath,
+			ProjectName:          project.Name,
+			IsEmpty:              project.EmptyRepo,
+			Last_Push:            lastPush,
 			Last_Update:          project.LastActivityAt,
 			IsFork:               project.ForkedFromProject != nil,
 			RepoSize:             repoSizeInMB,

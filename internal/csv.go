@@ -35,11 +35,14 @@ func ConvertToCSVFormat(projects []*ProjectSummary) [][]string {
 
 	// Add project rows
 	for _, project := range projects {
+		if project.Last_Push == nil {
+			project.Last_Push = &time.Time{}
+		}
 		row := []string{
 			project.Namespace,
 			project.ProjectName,
 			strconv.FormatBool(project.IsEmpty),
-			"N\\A",
+			project.Last_Push.Format(time.RFC3339),
 			project.Last_Update.Format(time.RFC3339),
 			strconv.FormatBool(project.IsFork),
 			strconv.FormatInt(project.RepoSize, 10),
