@@ -137,6 +137,7 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 	isMigrationIssue := false
 	var issueCommentCount int
 	var mergeRequestCommentCount int
+	var repoSizeInMB int64
 
 	for _, project := range gitlabProjects {
 		repoWithOwner := project.Namespace.Name + "/" + project.Name
@@ -167,7 +168,11 @@ func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 		projectReleases := projects.GetProjectReleases(project, client)
 
 		recordCount := len(commits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount
-		repoSizeInMB := (project.Statistics.RepositorySize / 1000000)
+		if project != nil && project.Statistics != nil {
+			repoSizeInMB = (project.Statistics.RepositorySize / 1000000)
+		} else {
+			log.Println(project, " and/or it's statistics value was found to be nil, repoSize will report 0")
+		}
 		if recordCount > 60000 || repoSizeInMB > 1500 {
 			isMigrationIssue = true
 		}
