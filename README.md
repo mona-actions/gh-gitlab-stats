@@ -7,12 +7,13 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 ## Requirements
 
 - Go 1.16 or higher
+- GitLab Server (tested on v16.2.4)
 
 ## Inputs
 
 | Name | Description | Required | Default |
 |------|-------------|----------|---------|
-| `hostname` | The hostname of the GitLab instance to gather metrics from. E.g https://gitlab.company.com | Yes | N/A |
+| `hostname` | The hostname of the GitLab instance to gather metrics from. E.g `https://gitlab.company.com` | Yes | N/A |
 | `token` | The token to use to authenticate to the GitLab instance. | Yes | N/A |
 | `output-file` | The output file name to write the results to. | No | `gitlab-stats-YYYY-MM-DD-HH-MM-SS.csv` |
 
@@ -24,7 +25,7 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 
 ## Usage
 
-```
+```sh
 ./gh-gitlab-stats --help
 gh cli extension for analyzing GitLab Instance to get migration statistics of
               repositories, issues...
@@ -58,26 +59,26 @@ TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Bran
 
 ### Columns
 
-- `Namespace_Name`: Namespace name of the Project
+- `Namespace_Name`: Namespace path of the Project
 - `Repo_Name`: Repository name
 - `Is_Empty`: Whether the repository is empty
-- `Last_Push`: **To be implemented**
+- `Last_Push`: Date/time when a push was last made to the default branch
 - `Last_Update`: Date/time when an update was last made
 - `isFork`: Whether the repository is a fork
 - `Repo_Size(mb)`: Size of the repository in megabytes
 - `Record_Count`: Number of database records this repository represents
 - `Collaborator_Count`: Number of users who are members to this repository
-- `Protected_Branch_Count`: **To be implemented**
+- `Protected_Branch_Count`: Number of protected branches
 - `MR_Review_Count`: **To be implemented**
 - `Milestone_Count`: Number of milestones
 - `Issue_Count`: Number of issues
 - `MergeRequest_Count`: Number of Merge requests
-- `MR_Review_Comment_Count`: **To be implemented**
+- `MR_Review_Comment_Count`: Number of merge request comments
 - `Commit_Comment_Count`: Number of commit comments
 - `Issue_Comment_Count`: Number of issue comments
-- `Issue_Event_Count`: Number of issues
+- `Issue_Event_Count`: "N\A"
 - `Release_Count`: Number of releases
-- `Project_Count`: "N\A"
+- `Issue_Board_Count`: Number of Issue Boards
 - `Branch_Count`: Number of branches
 - `Tag_Count`: Number of tags
 - `Discussion_Count`: "N\A"

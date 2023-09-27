@@ -4,54 +4,20 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
-	"encoding/csv"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
-	"github.com/mona-actions/gh-gitlab-stats/api/commits"
-	"github.com/mona-actions/gh-gitlab-stats/api/issues"
-	"github.com/mona-actions/gh-gitlab-stats/api/members"
-	"github.com/mona-actions/gh-gitlab-stats/api/mergerequests"
+	"github.com/mona-actions/gh-gitlab-stats/api/groups"
 	"github.com/mona-actions/gh-gitlab-stats/api/projects"
+	"github.com/mona-actions/gh-gitlab-stats/internal"
 	"github.com/pterm/pterm"
 	"github.com/spf13/cobra"
 	"github.com/xanzy/go-gitlab"
 )
 
-type GitLabSummary []ProjectSummary
-
-type ProjectSummary struct {
-	Namespace               string
-	ProjectName             string
-	IsEmpty                 bool
-	Last_Push               *time.Time
-	Last_Update             *time.Time
-	IsFork                  bool
-	RepoSize                int64
-	RecordCount             int
-	CollaboratorCount       int
-	ProtectedBranchCount    int
-	MergeRequestReviewCount int
-	MilestoneCount          int
-	IssueCount              int
-	MergeRequestCount       int
-	MRReviewCommentCount    int
-	CommitCommentCount      int
-	IssueCommentCount       int
-	ReleaseCount            int
-	BranchCount             int
-	TagCount                int
-	DiscussionCount         int
-	HasWiki                 bool
-	FullUrl                 string
-	MigrationIssue          bool
-}
-
 var (
-	projectsSummary       [][]string
-	gitlabProjectsSummary []*ProjectSummary
+	projectsSummary [][]string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -102,18 +68,18 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 	client := initClient(gitlabHostname, gitlabToken)
 	//getNamespaces(client)
 	groupSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Groups")
-	getGroups(client)
+	groups.GetGroups(client)
 	groupSpinnerSuccess.Success("Groups fetched successfully")
 
 	projectSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Projects")
 	gitlabProjects := projects.GetProjects(client)
 	projectSpinnerSuccess.Success("Projects fetched successfully")
 
-	gitlabProjectsSummary := getProjectSummary(gitlabProjects, client)
+	gitlabProjectsSummary := internal.GetProjectSummary(gitlabProjects, client)
 
 	csvFileSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Creating CSV File")
-	projectsSummary = convertToCSVFormat(gitlabProjectsSummary)
-	createCSV(projectsSummary, outputFileName)
+	projectsSummary = internal.ConvertToCSVFormat(gitlabProjectsSummary)
+	internal.CreateCSV(projectsSummary, outputFileName)
 	csvFileSpinnerSuccess.Success("CSV File created successfully")
 }
 
@@ -130,175 +96,6 @@ func initClient(hostname string, token string) *gitlab.Client {
 		log.Fatalf("Failed to create client: %v", err)
 	}
 	return git
-}
-
-func getProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) []*ProjectSummary {
-
-	isMigrationIssue := false
-	var issueCommentCount int
-	var mergeRequestCommentCount int
-	var repoSizeInMB int64
-
-	for _, project := range gitlabProjects {
-		repoWithOwner := project.Namespace.Name + "/" + project.Name
-		projectSummarySpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching " + repoWithOwner + " MetaData")
-
-		commits := commits.GetCommitActivity(project, client)
-
-		mergeRequests := mergerequests.GetMergeRequests(project, client)
-
-		for _, mergeRequest := range mergeRequests {
-			mergeRequestComments := mergerequests.GetMergeRequestComments(project, mergeRequest, client)
-			mergeRequestCommentCount += len(mergeRequestComments)
-		}
-
-		projectMembers := members.GetProjectMembers(project, client)
-
-		projectBranches := projects.GetProjectBranches(project, client)
-
-		projectMilestones := projects.GetProjectMilestones(project, client)
-
-		projectIssues := issues.GetProjectIssues(project, client)
-
-		for _, issue := range projectIssues {
-			issueComments := issues.GetIssueComments(project, issue, client)
-			issueCommentCount += len(issueComments)
-		}
-
-		projectReleases := projects.GetProjectReleases(project, client)
-
-		recordCount := len(commits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount
-		if project != nil && project.Statistics != nil {
-			repoSizeInMB = (project.Statistics.RepositorySize / 1000000)
-		} else {
-			log.Println(project, " and/or it's statistics value was found to be nil, repoSize will report 0")
-		}
-		if recordCount > 60000 || repoSizeInMB > 1500 {
-			isMigrationIssue = true
-		}
-		row := &ProjectSummary{
-			Namespace:         project.Namespace.Name,
-			ProjectName:       project.Name,
-			IsEmpty:           project.EmptyRepo,
-			Last_Update:       project.LastActivityAt,
-			IsFork:            project.ForkedFromProject != nil,
-			RepoSize:          repoSizeInMB,
-			RecordCount:       recordCount,
-			CollaboratorCount: len(projectMembers),
-			//ProtectedBranchCount: len(projectBranches),
-			//MergeRequestReviewCount:
-			MilestoneCount:       len(projectMilestones),
-			IssueCount:           len(projectIssues),
-			MergeRequestCount:    len(mergeRequests),
-			MRReviewCommentCount: mergeRequestCommentCount,
-			CommitCommentCount:   len(commits),
-			IssueCommentCount:    issueCommentCount,
-			//IssueEventCount:
-			ReleaseCount: len(projectReleases),
-			BranchCount:  len(projectBranches),
-			TagCount:     len(project.TagList),
-			//DiscussionCount:
-			HasWiki:        project.WikiEnabled,
-			FullUrl:        project.WebURL,
-			MigrationIssue: isMigrationIssue,
-		}
-		gitlabProjectsSummary = append(gitlabProjectsSummary, row)
-		projectSummarySpinnerSuccess.Success(repoWithOwner + " MetaData fetched successfully")
-	}
-
-	return gitlabProjectsSummary
-}
-
-func getGroups(client *gitlab.Client) []*gitlab.Group {
-	var groups []*gitlab.Group
-	opt := &gitlab.ListGroupsOptions{
-		ListOptions: gitlab.ListOptions{
-			PerPage: 100,
-			Page:    1,
-		},
-	}
-	//TODO: Check to see if pagination can be extrapolated to a function
-	for {
-		g, response, err := client.Groups.ListGroups(opt)
-
-		if err != nil {
-			log.Fatalf("Failed to list groups: %v", err)
-		}
-		groups = append(groups, g...)
-
-		if response.NextPage == 0 {
-			break
-		}
-
-		opt.Page = response.NextPage
-	}
-
-	for _, group := range groups {
-		log.Println("Found group", group.Name)
-	}
-
-	return groups
-}
-
-func createCSV(data [][]string, filename string) {
-	// Create team membership csv
-	file, err := os.Create(filename)
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	// Initialize csv writer
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
-	// Write team memberships to csv
-
-	for _, line := range data {
-		writer.Write(line)
-	}
-}
-
-func convertToCSVFormat(projects []*ProjectSummary) [][]string {
-	var rows [][]string
-
-	// Add header row
-	header := []string{"Namespace Name", "Project_Name", "Is_Empty", "Last_Push", "Last_Update", "isFork", "Repository_Size(mb)", "Record_Count", "Collaborator_Count", "Protected_Branch_Count", "MR_Review_Count", "Milestone_Count", "Issue_Count", "MergeRequest_Count", "MR_Review_Comment_Count", "Commit_Comment_Count", "Issue_Comment_Count", "Issue_Event_Count", "Release_Count", "Project_Count", "Branch_Count", "Tag_Count", "Discussion_Count", "Has Wiki", "Full_URL", "Migration_Issue"}
-	rows = append(rows, header)
-
-	// Add project rows
-	for _, project := range projects {
-		row := []string{
-			project.Namespace,
-			project.ProjectName,
-			strconv.FormatBool(project.IsEmpty),
-			"N\\A",
-			project.Last_Update.Format(time.RFC3339),
-			strconv.FormatBool(project.IsFork),
-			strconv.FormatInt(project.RepoSize, 10),
-			strconv.Itoa(project.RecordCount),
-			strconv.Itoa(project.CollaboratorCount),
-			"Protected Branch Count To be implemented",
-			" Mr Review Count To be implemented",
-			strconv.Itoa(project.MilestoneCount),
-			strconv.Itoa(project.IssueCount),
-			strconv.Itoa(project.MergeRequestCount),
-			strconv.Itoa(project.MRReviewCommentCount),
-			strconv.Itoa(project.CommitCommentCount),
-			strconv.Itoa(project.IssueCommentCount),
-			"N\\A",
-			strconv.Itoa(project.ReleaseCount),
-			"N\\A",
-			strconv.Itoa(project.BranchCount),
-			strconv.Itoa(project.TagCount),
-			"N\\A",
-			strconv.FormatBool(project.HasWiki),
-			project.FullUrl,
-		}
-		rows = append(rows, row)
-	}
-
-	return rows
 }
 
 // Namespace will return all users and groups together
