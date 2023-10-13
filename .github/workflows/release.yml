@@ -10,5 +10,5 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: cli/gh-extension-precompile@v1
+      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 #v4.1.0
+      - uses: cli/gh-extension-precompile@640911b0a0f2adb89a07a8ba547053cbd4001e1e #v1.3.1
