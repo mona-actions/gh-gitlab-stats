@@ -22,7 +22,7 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gh-gitlab-stats",
+	Use:   "gh gitlab-stats",
 	Short: "gh cli extension for analyzing GitLab Instance",
 	Long: `gh cli extension for analyzing GitLab Instance to get migration statistics of
 	      repositories, issues...`,

@@ -19,14 +19,13 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 
 ## How to Run
 
-1. Install dependencies: `go mod download`
-2. Build the tool: `go build .`
-3. Run the tool: `./gh-gitlab-stats --hostname <hostname> --token <token> --output-file <filename>`
+1. `gh extension install mona-actions/gh-gitlab-stats`
+2. Run the tool: `gh gitlab-stats --hostname <hostname> --token <token> --output-file <filename>`
 
 ## Usage
 
 ```sh
-./gh-gitlab-stats --help
+gh gitlab-stats --help
 gh cli extension for analyzing GitLab Instance to get migration statistics of
               repositories, issues...
 
@@ -53,8 +52,13 @@ The following permissions are required to run `gitlab-stats`, take into account 
 `gitlab-stats` outputs the following metrics to a CSV file:
 
 ```csv
-Namespace Name,Project_Name,Is_Empty,Last_Push,Last_Update,isFork,Repository_Size(mb),Record_Count,Collaborator_Count,Protected_Branch_Count,MR_Review_Count,Milestone_Count,Issue_Count,MergeRequest_Count,MR_Review_Comment_Count,Commit_Comment_Count,Issue_Comment_Count,Issue_Event_Count,Release_Count,Project_Count,Branch_Count,Tag_Count,Has Wiki,Full_URL,Migration_Issue
-TheLeafVillage,naruto,false,N\A,2023-08-21T22:22:55Z,false,0,12,2,Protected Branch Count To be implemented," Mr Review Count To be implemented",1,3,1,1,2,2,N\A,0,N\A,2,0,true,http://gitlab.amenocal.io/theleafvillage/naruto
+Namespace Name,Project_Name,Is_Empty,Last_Push,Last_Update,isFork,Repository_Size(mb),Record_Count,Collaborator_Count,Protected_Branch_Count,MR_Review_Count,Milestone_Count,Issue_Count,MergeRequest_Count,MR_Review_Comment_Count,Commit_Comment_Count,Issue_Comment_Count,Issue_Event_Count,Release_Count,Issue_Board_Count,Branch_Count,Tag_Count,Discussion_Count,Has Wiki,Full_URL,Migration_Issue
+theleafvillage/hyuga,neji,false,2023-08-31T22:08:34Z,2023-08-31T22:08:33Z,false,0,2,2,1," Mr Review Count To be implemented",0,0,0,0,0,0,N\A,0,0,1,0,N\A,false,http://gitlab-amenocal.expert-services.io/theleafvillage/hyuga/neji
+thesandvillage,gara,false,2023-08-31T22:07:10Z,2023-08-31T22:07:10Z,false,0,2,1,1," Mr Review Count To be implemented",0,0,0,0,0,0,N\A,0,0,1,0,N\A,false,http://gitlab-amenocal.expert-services.io/thesandvillage/gara
+theleafvillage,repo10,false,2023-01-24T16:22:59-06:00,2023-08-24T17:57:27Z,false,0,5,2,1," Mr Review Count To be implemented",0,3,0,0,0,0,N\A,0,0,1,0,N\A,false,http://gitlab-amenocal.expert-services.io/theleafvillage/repo10
+theleafvillage,repo9,false,2023-01-24T16:22:59-06:00,2023-08-24T17:57:26Z,false,0,5,2,1," Mr Review Count To be implemented",0,3,0,0,0,0,N\A,0,0,1,0,N\A,false,http://gitlab-amenocal.expert-services.io/theleafvillage/repo9
+theleafvillage,repo8,false,2023-01-24T16:22:59-06:00,2023-08-24T17:57:26Z,false,0,5,2,1," Mr Review Count To be implemented",0,3,0,0,0,0,N\A,0,0,1,0,N\A,false,http://gitlab-amenocal.expert-services.io/theleafvillage/repo8
+theleafvillage,repo7,false,2023-01-24T16:22:59-06:00,2023-08-24T17:57:25Z,false,0,5,2,1," Mr Review Count To be implemented",0,3,0,0,0,0,N\A,0,0,1,0,N\A,false,http://gitlab-amenocal.expert-services.io/theleafvillage/repo7
 ```
 
 ### Columns
