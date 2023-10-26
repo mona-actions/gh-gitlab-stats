@@ -4,8 +4,10 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/mona-actions/gh-gitlab-stats/api/groups"
@@ -51,7 +53,7 @@ func init() {
 	// when this action is called directly.
 	timestamp := time.Now().Format("2006-01-02-15-04-05")
 
-	rootCmd.Flags().StringP("hostname", "s", "", "The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com")
+	rootCmd.Flags().StringP("hostname", "s", "", "The hostname/server of the GitLab instance to gather metrics from E.g https://gitlab.company.com")
 	rootCmd.MarkFlagRequired("hostname")
 
 	rootCmd.Flags().StringP("token", "t", "", "The token to use to authenticate to the GitLab instance")
@@ -63,6 +65,10 @@ func init() {
 func getGitlabStats(cmd *cobra.Command, args []string) {
 
 	gitlabHostname := cmd.Flag("hostname").Value.String()
+	checkVars(cmd)
+	if !strings.HasPrefix(gitlabHostname, "http://") && !strings.HasPrefix(gitlabHostname, "https://") {
+		gitlabHostname = "https://" + gitlabHostname
+	}
 	gitlabToken := cmd.Flag("token").Value.String()
 	outputFileName := cmd.Flag("output-file").Value.String()
 	client := initClient(gitlabHostname, gitlabToken)
@@ -86,11 +92,7 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 func initClient(hostname string, token string) *gitlab.Client {
 	var git *gitlab.Client
 	var err error
-	if hostname == "" {
-		git, err = gitlab.NewClient(token)
-	} else {
-		git, err = gitlab.NewClient(token, gitlab.WithBaseURL(hostname))
-	}
+	git, err = gitlab.NewClient(token, gitlab.WithBaseURL(hostname))
 
 	if err != nil {
 		log.Fatalf("Failed to create client: %v", err)
@@ -98,16 +100,14 @@ func initClient(hostname string, token string) *gitlab.Client {
 	return git
 }
 
-// Namespace will return all users and groups together
-// func getNamespaces(client *gitlab.Client) []*gitlab.Namespace {
-// 	namespaces, _, err := client.Namespaces.ListNamespaces(&gitlab.ListNamespacesOptions{})
-
-// 	if err != nil {
-// 		log.Fatalf("Failed to list projects: %v", err)
-// 	}
-
-// 	for _, namespaces := range namespaces {
-// 		log.Println("Found namespace", namespaces.Name)
-// 	}
-// 	return namespaces
-// }
+func checkVars(cmd *cobra.Command) {
+	gitlabHostname := cmd.Flag("hostname").Value.String()
+	// Check if the hostname is "gitlab.com" or "https://gitlab.com"
+	if gitlabHostname == "gitlab.com" || gitlabHostname == "https://gitlab.com" || gitlabHostname == "http://gitlab.com" {
+		fmt.Println("Error: The hostname cannot be gitlab.com")
+		os.Exit(1)
+	} else if gitlabHostname == "" {
+		fmt.Println("Error: The hostname cannot be empty")
+		os.Exit(1)
+	}
+}
