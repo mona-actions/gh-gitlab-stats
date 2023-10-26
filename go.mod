@@ -2,8 +2,6 @@ module github.com/mona-actions/gh-gitlab-stats
 
 go 1.21
 
-toolchain go1.21.1
-
 require (
 	github.com/pterm/pterm v0.12.69
 	github.com/spf13/cobra v1.7.0
