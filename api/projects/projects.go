@@ -121,7 +121,7 @@ func GetProjectWikis(project *gitlab.Project, client *gitlab.Client) []*gitlab.W
 	}
 	p, response, err := client.Wikis.ListWikis(project.ID, opt)
 	if err != nil {
-		log.Fatalf("Failed to list wikis: %v %v", response, err)
+		log.Printf("Failed to list wikis: %v %v", response, err)
 	}
 	wikis = append(wikis, p...)
 
