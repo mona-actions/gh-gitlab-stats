@@ -7,7 +7,7 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 ## Requirements
 
 - Go 1.16 or higher
-- GitLab Server (tested on v16.2.4)
+- GitLab Server (tested on v16.2.4) (**Note:** This tool is not compatible with `GitLab.com`)
 
 ## Inputs
 
@@ -30,7 +30,7 @@ gh cli extension for analyzing GitLab Instance to get migration statistics of
               repositories, issues...
 
 Usage:
-  gh-gitlab-stats [flags]
+  gh gitlab-stats [flags]
 
 Flags:
   -s, --hostname string   The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com
