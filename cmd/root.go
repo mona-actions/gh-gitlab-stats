@@ -4,6 +4,7 @@ Copyright © 2023 NAME HERE <EMAIL ADDRESS>
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -32,8 +33,6 @@ var (
 		// has an action associated with it:
 		Run: getGitlabStats,
 	}
-	Debug   bool
-	JSONLog bool
 )
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -96,14 +95,17 @@ func initClient(hostname string, token string) *gitlab.Client {
 	var git *gitlab.Client
 	var err error
 	git, err = gitlab.NewClient(token, gitlab.WithBaseURL(hostname))
-
+	gitlabClientSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Authenticating to GitLab Host: %s", hostname))
 	if err != nil {
+		gitlabClientSpinner.Fail("Failed to create GitLab Client")
 		log.Fatalf("Failed to create client: %+v", err)
 	}
 	_, _, err = git.Users.CurrentUser()
 	if err != nil {
+		gitlabClientSpinner.Fail("Failed to authenticate to GitLab")
 		log.Fatalf("Failed to authenticate: %+v", err)
 	}
+	gitlabClientSpinner.Success("Authenticated to GitLab")
 	return git
 }
 
