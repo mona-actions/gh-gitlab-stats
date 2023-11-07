@@ -17,7 +17,7 @@ func GetCommitActivity(project *gitlab.Project, client *gitlab.Client) []*gitlab
 	for {
 		c, response, err := client.Commits.ListCommits(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list commits: %v %v", response, err)
+			log.Printf("Failed to list commit activity for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		commits = append(commits, c...)
 
@@ -43,7 +43,7 @@ func GetCommitComments(project *gitlab.Project, commit *gitlab.Commit, client *g
 	for {
 		c, response, err := client.Commits.GetCommitComments(project.ID, commit.ShortID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list commits: %v %v", response, err)
+			log.Printf("Failed to list commit comments for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 
 		commitComments = append(commitComments, c...)
