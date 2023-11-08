@@ -18,7 +18,7 @@ func GetProjectIssues(project *gitlab.Project, client *gitlab.Client) []*gitlab.
 	for {
 		p, response, err := client.Issues.ListProjectIssues(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list issues: %v %v", response, err)
+			log.Printf("Failed to list issues for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		issues = append(issues, p...)
 
@@ -44,7 +44,7 @@ func GetIssueComments(project *gitlab.Project, issue *gitlab.Issue, client *gitl
 	for {
 		p, response, err := client.Notes.ListIssueNotes(project.ID, issue.IID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list issue comments: %v %v", response, err)
+			log.Printf("Failed to list issues comments for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		issueComments = append(issueComments, p...)
 
@@ -69,7 +69,7 @@ func GetIssueBoards(project *gitlab.Project, client *gitlab.Client) []*gitlab.Is
 	for {
 		p, response, err := client.Boards.ListIssueBoards(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list issue boards: %v %v", response, err)
+			log.Printf("Failed to list issues boards for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		issueBoards = append(issueBoards, p...)
 

@@ -47,7 +47,7 @@ func GetProjectMilestones(project *gitlab.Project, client *gitlab.Client) []*git
 	for {
 		p, response, err := client.Milestones.ListMilestones(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list milestones: %v %v", response, err)
+			log.Printf("Failed to list Project Milestones for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		milestones = append(milestones, p...)
 
@@ -74,7 +74,7 @@ func GetProjectBranches(project *gitlab.Project, client *gitlab.Client) []*gitla
 	for {
 		p, response, err := client.Branches.ListBranches(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list branches: %v %v", response, err)
+			log.Printf("Failed to list Project Branches for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		branches = append(branches, p...)
 
@@ -100,7 +100,7 @@ func GetProjectReleases(project *gitlab.Project, client *gitlab.Client) []*gitla
 	for {
 		p, response, err := client.Releases.ListReleases(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list releases: %v %v", response, err)
+			log.Printf("Failed to list Project Releases for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		releases = append(releases, p...)
 
@@ -121,7 +121,7 @@ func GetProjectWikis(project *gitlab.Project, client *gitlab.Client) []*gitlab.W
 	}
 	p, response, err := client.Wikis.ListWikis(project.ID, opt)
 	if err != nil {
-		log.Printf("Failed to list wikis: %v %v", response, err)
+		log.Printf("Failed to list wikis for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 	}
 	wikis = append(wikis, p...)
 

@@ -18,7 +18,7 @@ func GetProjectMembers(project *gitlab.Project, client *gitlab.Client) []*gitlab
 	for {
 		p, response, err := client.ProjectMembers.ListAllProjectMembers(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list project members: %v %v", response, err)
+			log.Printf("Failed to list project members for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		projectMembers = append(projectMembers, p...)
 

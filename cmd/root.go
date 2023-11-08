@@ -23,15 +23,17 @@ var (
 )
 
 // rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "gh gitlab-stats",
-	Short: "gh cli extension for analyzing GitLab Instance",
-	Long: `gh cli extension for analyzing GitLab Instance to get migration statistics of
+var (
+	rootCmd = &cobra.Command{
+		Use:   "gh gitlab-stats",
+		Short: "gh cli extension for analyzing GitLab Instance",
+		Long: `gh cli extension for analyzing GitLab Instance to get migration statistics of
 	      repositories, issues...`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	Run: getGitlabStats,
-}
+		// Uncomment the following line if your bare application
+		// has an action associated with it:
+		Run: getGitlabStats,
+	}
+)
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
@@ -93,10 +95,17 @@ func initClient(hostname string, token string) *gitlab.Client {
 	var git *gitlab.Client
 	var err error
 	git, err = gitlab.NewClient(token, gitlab.WithBaseURL(hostname))
-
+	gitlabClientSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Authenticating to GitLab Host: %s", hostname))
 	if err != nil {
-		log.Fatalf("Failed to create client: %v", err)
+		gitlabClientSpinner.Fail("Failed to create GitLab Client")
+		log.Fatalf("Failed to create client: %+v", err)
 	}
+	_, _, err = git.Users.CurrentUser()
+	if err != nil {
+		gitlabClientSpinner.Fail("Failed to authenticate to GitLab")
+		log.Fatalf("Failed to authenticate: %+v", err)
+	}
+	gitlabClientSpinner.Success("Authenticated to GitLab")
 	return git
 }
 
@@ -104,10 +113,8 @@ func checkVars(cmd *cobra.Command) {
 	gitlabHostname := cmd.Flag("hostname").Value.String()
 	// Check if the hostname is "gitlab.com" or "https://gitlab.com"
 	if gitlabHostname == "gitlab.com" || gitlabHostname == "https://gitlab.com" || gitlabHostname == "http://gitlab.com" {
-		fmt.Println("Error: The hostname cannot be gitlab.com")
-		os.Exit(1)
+		log.Fatalf("The hostname cannot be gitlab.com")
 	} else if gitlabHostname == "" {
-		fmt.Println("Error: The hostname cannot be empty")
-		os.Exit(1)
+		log.Fatalf("The hostname cannot be empty")
 	}
 }

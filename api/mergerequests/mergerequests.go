@@ -18,7 +18,7 @@ func GetMergeRequests(project *gitlab.Project, client *gitlab.Client) []*gitlab.
 	for {
 		p, response, err := client.MergeRequests.ListProjectMergeRequests(project.ID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list merge requests: %v %v", response, err)
+			log.Printf("Failed to list MergeRequests for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		mergeRequests = append(mergeRequests, p...)
 
@@ -44,7 +44,7 @@ func GetMergeRequestComments(project *gitlab.Project, mr *gitlab.MergeRequest, c
 	for {
 		p, response, err := client.Notes.ListMergeRequestNotes(project.ID, mr.IID, opt)
 		if err != nil {
-			log.Fatalf("Failed to list merge request comments: %v %v", response, err)
+			log.Printf("Failed to list MergeRequests Comments for: %v, response: %v error: %v", project.NameWithNamespace, response, err)
 		}
 		mrComments = append(mrComments, p...)
 

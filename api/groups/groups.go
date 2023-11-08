@@ -1,7 +1,6 @@
 package groups
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/xanzy/go-gitlab"
@@ -20,7 +19,7 @@ func GetGroups(client *gitlab.Client) []*gitlab.Group {
 		g, response, err := client.Groups.ListGroups(opt)
 
 		if err != nil {
-			log.Fatalf("Failed to list groups: %v", err)
+			log.Printf("Failed to list groups: %v", err)
 		}
 		groups = append(groups, g...)
 
@@ -32,7 +31,7 @@ func GetGroups(client *gitlab.Client) []*gitlab.Group {
 	}
 
 	for _, group := range groups {
-		fmt.Println("Found group", group.Name)
+		log.Printf("Found group %s", group.Name)
 	}
 
 	return groups
