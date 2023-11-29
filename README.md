@@ -16,11 +16,16 @@ GitLab-Stats is a command-line interface that gathers GitLab metrics from a spec
 | `hostname` | The hostname of the GitLab instance to gather metrics from. E.g `https://gitlab.company.com` | Yes | N/A |
 | `token` | The token to use to authenticate to the GitLab instance. | Yes | N/A |
 | `output-file` | The output file name to write the results to. | No | `gitlab-stats-YYYY-MM-DD-HH-MM-SS.csv` |
+| `groups` | A comma-separated list of groups to gather metrics from. | No | "" |
 
 ## How to Run
 
 1. `gh extension install mona-actions/gh-gitlab-stats`
 2. Run the tool: `gh gitlab-stats --hostname <hostname> --token <token> --output-file <filename>`
+
+## Upgrade
+
+`gh extension upgrade gitlab-stats`
 
 ## Usage
 
@@ -33,10 +38,11 @@ Usage:
   gh gitlab-stats [flags]
 
 Flags:
-  -s, --hostname string   The hostname of the GitLab instance to gather metrics from E.g https://gitlab.company.com
-  -h, --help                     help for gh-gitlab-stats
-  -f, --output-file string       The output file name to write the results to (default "gitlab-stats-YYYY-MM-DD-HH-MM-SS.csv")
-  -t, --token string             The token to use to authenticate to the GitLab instance
+  -g, --groups string        The specific groups to gather metrics from. E.g group1,group2,group3
+  -h, --help                 help for gh
+  -s, --hostname string      The hostname/server of the GitLab instance to gather metrics from E.g https://gitlab.company.com
+  -f, --output-file string   The output file name to write the results to (default "gitlab-stats-YYYY-MM-DD-HH-MM-SS.csv")
+  -t, --token string         The token to use to authenticate to the GitLab instance
 ```
 
 ## Permissions
