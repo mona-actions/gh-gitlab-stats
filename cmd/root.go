@@ -85,6 +85,10 @@ func getGitlabStats(cmd *cobra.Command, args []string) {
 	if groupNames != "" {
 		groupSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Groups")
 		gitlabGroups = internal.GetGroupsFromNames(client, groupNames)
+		if len(gitlabGroups) == 0 {
+			groupSpinnerSuccess.Info("No groups found")
+			os.Exit(0)
+		}
 		groupSpinnerSuccess.Success("Groups fetched successfully")
 	}
 
