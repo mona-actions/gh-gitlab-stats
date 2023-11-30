@@ -65,7 +65,7 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 			commitCommentCount += len(commitComments)
 		}
 
-		if projectCommits != nil {
+		if len(projectCommits) > 0 {
 			lastCommit := projectCommits[0]
 			lastPush = lastCommit.CommittedDate
 			//fmt.Println(lastCommit.CommittedDate, lastCommit.Title)
@@ -100,6 +100,10 @@ func GetProjectSummary(gitlabProjects []*gitlab.Project, client *gitlab.Client) 
 		}
 
 		projectReleases := projects.GetProjectReleases(project, client)
+
+		if project.TagList == nil {
+			project.TagList = []string{}
+		}
 
 		recordCount := len(projectCommits) + len(projectIssues) + len(mergeRequests) + len(projectMilestones) + len(projectReleases) + len(projectIssueBoards) + len(projectBranches) + len(project.TagList) + mergeRequestCommentCount + issueCommentCount + commitCommentCount
 		if project != nil && project.Statistics != nil {

@@ -35,6 +35,17 @@ func GetProjects(client *gitlab.Client) []*gitlab.Project {
 	return projects
 }
 
+func GetProject(project *gitlab.Project, client *gitlab.Client) *gitlab.Project {
+	opt := &gitlab.GetProjectOptions{
+		Statistics: gitlab.Bool(true),
+	}
+	project, _, err := client.Projects.GetProject(project.ID, opt)
+	if err != nil {
+		log.Printf("Failed to get project:%v %v", project.Name, err)
+	}
+	return project
+}
+
 func GetProjectMilestones(project *gitlab.Project, client *gitlab.Client) []*gitlab.Milestone {
 	var milestones []*gitlab.Milestone
 	opt := &gitlab.ListMilestonesOptions{

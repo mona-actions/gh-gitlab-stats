@@ -62,25 +62,42 @@ func init() {
 	rootCmd.MarkFlagRequired("token")
 
 	rootCmd.Flags().StringP("output-file", "f", "gitlab-stats-"+timestamp+".csv", "The output file name to write the results to")
+
+	rootCmd.Flags().StringP("groups", "g", "", "The specific groups to gather metrics from. E.g group1,group2,group3")
 }
 
 func getGitlabStats(cmd *cobra.Command, args []string) {
-
+	// Init Variables
 	gitlabHostname := cmd.Flag("hostname").Value.String()
+	groupNames := cmd.Flag("groups").Value.String()
+	gitlabToken := cmd.Flag("token").Value.String()
+	outputFileName := cmd.Flag("output-file").Value.String()
+	var gitlabGroups []*gitlab.Group
+	var gitlabProjects []*gitlab.Project
 	checkVars(cmd)
 	if !strings.HasPrefix(gitlabHostname, "http://") && !strings.HasPrefix(gitlabHostname, "https://") {
 		gitlabHostname = "https://" + gitlabHostname
 	}
-	gitlabToken := cmd.Flag("token").Value.String()
-	outputFileName := cmd.Flag("output-file").Value.String()
+
+	//Init GitLab Client
 	client := initClient(gitlabHostname, gitlabToken)
-	//getNamespaces(client)
-	groupSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Groups")
-	groups.GetGroups(client)
-	groupSpinnerSuccess.Success("Groups fetched successfully")
+
+	if groupNames != "" {
+		groupSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Groups")
+		gitlabGroups = internal.GetGroupsFromNames(client, groupNames)
+		if len(gitlabGroups) == 0 {
+			groupSpinnerSuccess.Info("No groups found")
+			os.Exit(0)
+		}
+		groupSpinnerSuccess.Success("Groups fetched successfully")
+	}
 
 	projectSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Projects")
-	gitlabProjects := projects.GetProjects(client)
+	if groupNames != "" {
+		gitlabProjects = GetGitLabGroupsProjects(client, gitlabGroups)
+	} else {
+		gitlabProjects = projects.GetProjects(client)
+	}
 	projectSpinnerSuccess.Success("Projects fetched successfully")
 
 	gitlabProjectsSummary := internal.GetProjectSummary(gitlabProjects, client)
@@ -117,4 +134,18 @@ func checkVars(cmd *cobra.Command) {
 	} else if gitlabHostname == "" {
 		log.Fatalf("The hostname cannot be empty")
 	}
+}
+
+func GetGitLabGroupsProjects(client *gitlab.Client, gitlabGroups []*gitlab.Group) []*gitlab.Project {
+	var gitlabProjects []*gitlab.Project
+
+	// Get all projects in the specified groups
+	groupsProjects := groups.GetGroupsProjects(client, gitlabGroups)
+	for _, project := range groupsProjects {
+
+		// Get the project details with statistics
+		gitlabProject := projects.GetProject(project, client)
+		gitlabProjects = append(gitlabProjects, gitlabProject)
+	}
+	return gitlabProjects
 }
