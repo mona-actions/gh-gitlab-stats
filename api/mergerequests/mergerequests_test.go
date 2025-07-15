@@ -16,7 +16,7 @@ func TestGetMergeRequests(t *testing.T) {
 	gock.InterceptClient(httpClient)
 
 	// Mock GitLab client with custom HTTP client
-	client, err := gitlab.NewClient("test-token", 
+	client, err := gitlab.NewClient("test-token",
 		gitlab.WithBaseURL("https://gitlab.example.com/api/v4"),
 		gitlab.WithHTTPClient(httpClient))
 	if err != nil {
@@ -80,7 +80,7 @@ func TestGetMergeRequestComments(t *testing.T) {
 	gock.InterceptClient(httpClient)
 
 	// Mock GitLab client with custom HTTP client
-	client, err := gitlab.NewClient("test-token", 
+	client, err := gitlab.NewClient("test-token",
 		gitlab.WithBaseURL("https://gitlab.example.com/api/v4"),
 		gitlab.WithHTTPClient(httpClient))
 	if err != nil {

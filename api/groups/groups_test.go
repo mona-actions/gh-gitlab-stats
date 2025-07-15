@@ -16,7 +16,7 @@ func TestGetGroups(t *testing.T) {
 	gock.InterceptClient(httpClient)
 
 	// Mock GitLab client with custom HTTP client
-	client, err := gitlab.NewClient("test-token", 
+	client, err := gitlab.NewClient("test-token",
 		gitlab.WithBaseURL("https://gitlab.example.com/api/v4"),
 		gitlab.WithHTTPClient(httpClient))
 	if err != nil {
@@ -72,7 +72,7 @@ func TestGetGroupsByName(t *testing.T) {
 	gock.InterceptClient(httpClient)
 
 	// Mock GitLab client with custom HTTP client
-	client, err := gitlab.NewClient("test-token", 
+	client, err := gitlab.NewClient("test-token",
 		gitlab.WithBaseURL("https://gitlab.example.com/api/v4"),
 		gitlab.WithHTTPClient(httpClient))
 	if err != nil {
@@ -123,7 +123,7 @@ func TestGetGroupsProjects(t *testing.T) {
 	gock.InterceptClient(httpClient)
 
 	// Mock GitLab client with custom HTTP client
-	client, err := gitlab.NewClient("test-token", 
+	client, err := gitlab.NewClient("test-token",
 		gitlab.WithBaseURL("https://gitlab.example.com/api/v4"),
 		gitlab.WithHTTPClient(httpClient))
 	if err != nil {
@@ -137,7 +137,7 @@ func TestGetGroupsProjects(t *testing.T) {
 			Name: "Test Group 1",
 		},
 		{
-			ID:   2, 
+			ID:   2,
 			Name: "Test Group 2",
 		},
 	}
