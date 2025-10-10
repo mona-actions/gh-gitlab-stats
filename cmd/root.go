@@ -32,7 +32,7 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "gl-repo-stats",
+	Use:   "gitlab-stats",
 	Short: "GitLab Repository Statistics Tool",
 	Long: `A GitHub CLI extension for scanning GitLab instances and generating 
 repository statistics reports similar to GitHub's repository inventory.
@@ -349,9 +349,9 @@ func outputTable(stats []*models.RepositoryStats) error {
 			stat.IsEmpty,
 			stat.RepoSizeMB,
 			stat.LFSSizeMB,
-			stat.RecordCount,
+			stat.CommitCount,
 			stat.IssueCount,
-			stat.PRCount,
+			stat.MRCount,
 			stat.BranchCount,
 			stat.TagCount)
 	}

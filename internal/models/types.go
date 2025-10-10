@@ -2,23 +2,22 @@ package models
 
 import "time"
 
-// RepositoryStats represents the CSV output structure matching the GitHub version
+// RepositoryStats represents the CSV output structure for GitLab projects
 type RepositoryStats struct {
 	Namespace            string     `csv:"Namespace"`
-	RepoName             string     `csv:"Repo_Name"`
+	RepoName             string     `csv:"Project"`
 	IsEmpty              bool       `csv:"Is_Empty"`
 	IsFork               bool       `csv:"isFork"`
 	IsArchive            bool       `csv:"isArchive"`
-	RepoSizeMB           float64    `csv:"Repo_Size(mb)"`
+	RepoSizeMB           float64    `csv:"Project_Size(mb)"`
 	LFSSizeMB            float64    `csv:"LFS_Size(mb)"`
-	RecordCount          int        `csv:"Record_Count"`
 	CollaboratorCount    int        `csv:"Collaborator_Count"`
 	ProtectedBranchCount int        `csv:"Protected_Branch_Count"`
-	PRReviewCount        int        `csv:"PR_Review_Count"`
+	MRReviewCount        int        `csv:"MR_Review_Count"`
 	MilestoneCount       int        `csv:"Milestone_Count"`
 	IssueCount           int        `csv:"Issue_Count"`
-	PRCount              int        `csv:"PR_Count"`
-	PRReviewCommentCount int        `csv:"PR_Review_Comment_Count"`
+	MRCount              int        `csv:"MR_Count"`
+	MRReviewCommentCount int        `csv:"MR_Review_Comment_Count"`
 	CommitCount          int        `csv:"Commit_Count"`
 	IssueCommentCount    int        `csv:"Issue_Comment_Count"`
 	ReleaseCount         int        `csv:"Release_Count"`

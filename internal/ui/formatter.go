@@ -99,19 +99,19 @@ func getCSVHeaders() []string {
 func convertToCSVRow(stat *models.RepositoryStats) []string {
 	return []string{
 		stat.Namespace,                       // Namespace
-		stat.RepoName,                        // Repo_Name
+		stat.RepoName,                        // Project
 		boolToString(stat.IsEmpty),           // Is_Empty
 		boolToString(stat.IsFork),            // isFork
 		boolToString(stat.IsArchive),         // isArchive
-		fmt.Sprintf("%.0f", stat.RepoSizeMB), // Repo_Size(mb) - no decimals
+		fmt.Sprintf("%.0f", stat.RepoSizeMB), // Project_Size(mb) - no decimals
 		fmt.Sprintf("%.0f", stat.LFSSizeMB),  // LFS_Size(mb) - no decimals
 		fmt.Sprintf("%d", stat.CollaboratorCount),
 		fmt.Sprintf("%d", stat.ProtectedBranchCount),
-		fmt.Sprintf("%d", stat.PRReviewCount), // MR_Review_Count
+		fmt.Sprintf("%d", stat.MRReviewCount), // MR_Review_Count
 		fmt.Sprintf("%d", stat.MilestoneCount),
 		fmt.Sprintf("%d", stat.IssueCount),
-		fmt.Sprintf("%d", stat.PRCount),              // MR_Count
-		fmt.Sprintf("%d", stat.PRReviewCommentCount), // MR_Review_Comment_Count
+		fmt.Sprintf("%d", stat.MRCount),              // MR_Count
+		fmt.Sprintf("%d", stat.MRReviewCommentCount), // MR_Review_Comment_Count
 		fmt.Sprintf("%d", stat.CommitCount),          // Commit_Count
 		fmt.Sprintf("%d", stat.IssueCommentCount),    // Issue_Comment_Count
 		fmt.Sprintf("%d", stat.ReleaseCount),

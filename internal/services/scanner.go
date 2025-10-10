@@ -244,14 +244,13 @@ func ConvertToRepoStats(project *api.Project, stats *api.ProjectStatistics) *mod
 		IsArchive:            project.Archived,
 		RepoSizeMB:           float64(stats.RepositorySize) / (1024 * 1024),
 		LFSSizeMB:            float64(stats.LFSObjectsSize) / (1024 * 1024),
-		RecordCount:          stats.CommitCount,
 		CollaboratorCount:    stats.MemberCount,
 		ProtectedBranchCount: countProtectedBranches(stats.BranchCount),
-		PRReviewCount:        stats.MergeRequestReviewCount,
+		MRReviewCount:        stats.MergeRequestReviewCount,
 		MilestoneCount:       stats.MilestoneCount,
 		IssueCount:           stats.IssueCount,
-		PRCount:              stats.MergeRequestCount,
-		PRReviewCommentCount: stats.MergeRequestCommentCount,
+		MRCount:              stats.MergeRequestCount,
+		MRReviewCommentCount: stats.MergeRequestCommentCount,
 		CommitCount:          stats.CommitCount,
 		IssueCommentCount:    stats.IssueCommentCount,
 		ReleaseCount:         stats.ReleaseCount,
@@ -295,7 +294,7 @@ func logProgress(verbose bool, current, total int, stat *models.RepositoryStats)
 	if verbose {
 		fmt.Printf("\n[%d/%d] ✓ Scanned: %s/%s\n", current, total, stat.Namespace, stat.RepoName)
 		fmt.Printf("    Size: %.0f MB | LFS: %.0f MB | Commits: %d | Issues: %d | MRs: %d | Branches: %d | Tags: %d\n",
-			stat.RepoSizeMB, stat.LFSSizeMB, stat.RecordCount, stat.IssueCount, stat.PRCount, stat.BranchCount, stat.TagCount)
+			stat.RepoSizeMB, stat.LFSSizeMB, stat.CommitCount, stat.IssueCount, stat.MRCount, stat.BranchCount, stat.TagCount)
 	} else {
 		fmt.Printf("\r[%d/%d] Scanning projects... Current: %s/%s",
 			current, total, truncate(stat.Namespace, 20), truncate(stat.RepoName, 30))

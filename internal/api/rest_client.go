@@ -470,11 +470,8 @@ func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID i
 		}
 
 		for _, mr := range pageMRs {
-			// Count approvals if available (upvotes is a proxy for approvals in GitLab)
-			if upvotes, ok := mr["upvotes"].(float64); ok && upvotes > 0 {
-				totalReviews += int(upvotes)
-			}
-			// Also check for approved_by count if available
+			// Only count actual approvals from approved_by, not upvotes
+			// Upvotes are just "thumbs up" reactions, not actual code reviews
 			if approvers, ok := mr["approved_by"].([]interface{}); ok {
 				totalReviews += len(approvers)
 			}
