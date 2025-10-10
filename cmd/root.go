@@ -1,39 +1,53 @@
-/*
-Copyright © 2023 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
+	"bufio"
+	"context"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/mona-actions/gh-gitlab-stats/api/groups"
-	"github.com/mona-actions/gh-gitlab-stats/api/projects"
-	"github.com/mona-actions/gh-gitlab-stats/internal"
-	"github.com/pterm/pterm"
+	"github.com/mona-actions/gh-gitlab-stats/internal/api"
+	"github.com/mona-actions/gh-gitlab-stats/internal/models"
+	"github.com/mona-actions/gh-gitlab-stats/internal/services"
+	"github.com/mona-actions/gh-gitlab-stats/internal/ui"
 	"github.com/spf13/cobra"
-	"github.com/xanzy/go-gitlab"
+	"github.com/spf13/viper"
 )
 
 var (
-	projectsSummary [][]string
+	cfgFile string
+	verbose bool
+)
+
+var (
+	debug     bool
+	hostname  string
+	input     string
+	namespace string
+	output    string
+	repoList  string
+	token     string
 )
 
 // rootCmd represents the base command when called without any subcommands
-var (
-	rootCmd = &cobra.Command{
-		Use:   "gh gitlab-stats",
-		Short: "gh cli extension for analyzing GitLab Instance",
-		Long: `gh cli extension for analyzing GitLab Instance to get migration statistics of
-	      repositories, issues...`,
-		// Uncomment the following line if your bare application
-		// has an action associated with it:
-		Run: getGitlabStats,
-	}
-)
+var rootCmd = &cobra.Command{
+	Use:   "gl-repo-stats",
+	Short: "GitLab Repository Statistics Tool",
+	Long: `A GitHub CLI extension for scanning GitLab instances and generating 
+repository statistics reports similar to GitHub's repository inventory.
+
+This tool connects to GitLab instances (including GitLab.com or self-hosted)
+and generates comprehensive statistics about repositories, including:
+- Repository metadata and settings
+- Collaboration statistics (issues, merge requests, members)
+- Activity metrics (commits, releases, tags)
+- Storage and size information
+
+The output is compatible with GitHub repository analysis tools.`,
+	RunE: runGLRepoStats,
+}
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
@@ -45,107 +59,312 @@ func Execute() {
 }
 
 func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
+	cobra.OnInitialize(initConfig)
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.gh-gitlab-stats.yaml)")
+	// Command flags matching the specification
+	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable Debug logging")
+	rootCmd.Flags().StringVarP(&hostname, "hostname", "H", "gitlab.com", "The GitLab hostname for the request")
+	rootCmd.Flags().StringVarP(&input, "input", "i", "", "Set path to a file with a list of namespaces to scan, one per line, newline delimited")
+	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Name of the GitLab namespace to be analyzed")
+	rootCmd.Flags().StringVarP(&output, "output", "O", "CSV", "Format of output, can either be \"CSV\" or \"Table\"")
+	rootCmd.Flags().StringVar(&repoList, "repo-list", "", "Path to a file with a list of repositories to scan, one per line, newline delimited")
+	rootCmd.Flags().StringVarP(&token, "token", "t", "", "Set Personal Access Token for GitLab API")
 
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	timestamp := time.Now().Format("2006-01-02-15-04-05")
-
-	rootCmd.Flags().StringP("hostname", "s", "", "The hostname/server of the GitLab instance to gather metrics from E.g https://gitlab.company.com")
-	rootCmd.MarkFlagRequired("hostname")
-
-	rootCmd.Flags().StringP("token", "t", "", "The token to use to authenticate to the GitLab instance")
+	// Mark required flags
 	rootCmd.MarkFlagRequired("token")
 
-	rootCmd.Flags().StringP("output-file", "f", "gitlab-stats-"+timestamp+".csv", "The output file name to write the results to")
-
-	rootCmd.Flags().StringP("groups", "g", "", "The specific groups to gather metrics from. E.g group1,group2,group3")
-}
-
-func getGitlabStats(cmd *cobra.Command, args []string) {
-	// Init Variables
-	gitlabHostname := cmd.Flag("hostname").Value.String()
-	groupNames := cmd.Flag("groups").Value.String()
-	gitlabToken := cmd.Flag("token").Value.String()
-	outputFileName := cmd.Flag("output-file").Value.String()
-	var gitlabGroups []*gitlab.Group
-	var gitlabProjects []*gitlab.Project
-	checkVars(cmd)
-	if !strings.HasPrefix(gitlabHostname, "http://") && !strings.HasPrefix(gitlabHostname, "https://") {
-		gitlabHostname = "https://" + gitlabHostname
-	}
-
-	//Init GitLab Client
-	client := initClient(gitlabHostname, gitlabToken)
-
-	if groupNames != "" {
-		groupSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Groups")
-		gitlabGroups = internal.GetGroupsFromNames(client, groupNames)
-		if len(gitlabGroups) == 0 {
-			groupSpinnerSuccess.Info("No groups found")
-			os.Exit(0)
-		}
-		groupSpinnerSuccess.Success("Groups fetched successfully")
-	}
-
-	projectSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Fetching Projects")
-	if groupNames != "" {
-		gitlabProjects = GetGitLabGroupsProjects(client, gitlabGroups)
+	// Bind flags to viper
+	viper.BindPFlag("debug", rootCmd.Flags().Lookup("debug"))
+} // initConfig reads in config file and ENV variables if set.
+func initConfig() {
+	if cfgFile != "" {
+		// Use config file from the flag.
+		viper.SetConfigFile(cfgFile)
 	} else {
-		gitlabProjects = projects.GetProjects(client)
+		// Find home directory.
+		home, err := os.UserHomeDir()
+		cobra.CheckErr(err)
+
+		// Search config in home directory with name ".gh-gitlab-stats" (without extension).
+		viper.AddConfigPath(home + "/.gh-gitlab-stats")
+		viper.AddConfigPath(".")
+		viper.SetConfigType("yaml")
+		viper.SetConfigName("config")
 	}
-	projectSpinnerSuccess.Success("Projects fetched successfully")
 
-	gitlabProjectsSummary := internal.GetProjectSummary(gitlabProjects, client)
+	viper.AutomaticEnv() // read in environment variables that match
 
-	csvFileSpinnerSuccess, _ := pterm.DefaultSpinner.Start("Creating CSV File")
-	projectsSummary = internal.ConvertToCSVFormat(gitlabProjectsSummary)
-	internal.CreateCSV(projectsSummary, outputFileName)
-	csvFileSpinnerSuccess.Success("CSV File created successfully")
+	// If a config file is found, read it in.
+	if err := viper.ReadInConfig(); err == nil && debug {
+		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
+	}
 }
 
-func initClient(hostname string, token string) *gitlab.Client {
-	var git *gitlab.Client
-	var err error
-	git, err = gitlab.NewClient(token, gitlab.WithBaseURL(hostname))
-	gitlabClientSpinner, _ := pterm.DefaultSpinner.Start(fmt.Sprintf("Authenticating to GitLab Host: %s", hostname))
+// runGLRepoStats is the main function that executes the GitLab repository statistics collection
+func runGLRepoStats(cmd *cobra.Command, args []string) error {
+	if debug {
+		fmt.Println("Debug mode enabled")
+	}
+
+	// Validate inputs
+	if err := validateInputs(); err != nil {
+		return err
+	}
+
+	// Setup client and scanner
+	gitlabURL := buildGitLabURL()
+	client, err := api.NewRestClient(gitlabURL, token)
 	if err != nil {
-		gitlabClientSpinner.Fail("Failed to create GitLab Client")
-		log.Fatalf("Failed to create client: %+v", err)
+		return fmt.Errorf("failed to create GitLab client: %w", err)
 	}
-	_, _, err = git.Users.CurrentUser()
+
+	scanner := services.NewScanner(client)
+
+	// Prepare scan options
+	scanOptions := &models.ScanOptions{
+		GitLabURL:       gitlabURL,
+		Token:           token,
+		OutputFormat:    strings.ToLower(output),
+		Verbose:         debug,
+		IncludeArchived: true,
+		MaxProjects:     0,
+	}
+
+	// Run scan
+	fmt.Printf("Starting GitLab repository statistics collection...\n")
+	allStats, err := executeScan(cmd.Context(), client, scanner, scanOptions)
 	if err != nil {
-		gitlabClientSpinner.Fail("Failed to authenticate to GitLab")
-		log.Fatalf("Failed to authenticate: %+v", err)
+		return err
 	}
-	gitlabClientSpinner.Success("Authenticated to GitLab")
-	return git
+
+	// Write output
+	return writeOutput(allStats)
 }
 
-func checkVars(cmd *cobra.Command) {
-	gitlabHostname := cmd.Flag("hostname").Value.String()
-	// Check if the hostname is "gitlab.com" or "https://gitlab.com"
-	if gitlabHostname == "gitlab.com" || gitlabHostname == "https://gitlab.com" || gitlabHostname == "http://gitlab.com" {
-		log.Fatalf("The hostname cannot be gitlab.com")
-	} else if gitlabHostname == "" {
-		log.Fatalf("The hostname cannot be empty")
+// validateInputs validates command-line flags
+func validateInputs() error {
+	if token == "" {
+		return fmt.Errorf("GitLab token is required. Use -t or --token flag")
 	}
+	if output != "CSV" && output != "Table" {
+		return fmt.Errorf("invalid output format: %s. Must be 'CSV' or 'Table'", output)
+	}
+	return nil
 }
 
-func GetGitLabGroupsProjects(client *gitlab.Client, gitlabGroups []*gitlab.Group) []*gitlab.Project {
-	var gitlabProjects []*gitlab.Project
-
-	// Get all projects in the specified groups
-	groupsProjects := groups.GetGroupsProjects(client, gitlabGroups)
-	for _, project := range groupsProjects {
-
-		// Get the project details with statistics
-		gitlabProject := projects.GetProject(project, client)
-		gitlabProjects = append(gitlabProjects, gitlabProject)
+// buildGitLabURL constructs the GitLab URL from hostname
+func buildGitLabURL() string {
+	if strings.HasPrefix(hostname, "http://") || strings.HasPrefix(hostname, "https://") {
+		return hostname
 	}
-	return gitlabProjects
+	return "https://" + hostname
+}
+
+// readLinesFromFile reads non-empty, non-comment lines from a file
+func readLinesFromFile(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" && !strings.HasPrefix(line, "#") {
+			lines = append(lines, line)
+		}
+	}
+	return lines, scanner.Err()
+}
+
+// executeScan performs the repository scan based on input parameters
+func executeScan(ctx context.Context, client *api.RestClient, scanner *services.Scanner, scanOptions *models.ScanOptions) ([]*models.RepositoryStats, error) {
+	progressReporter := createProgressReporter()
+
+	// Handle specific repository list
+	if repoList != "" {
+		return scanSpecificRepositories(ctx, client)
+	}
+
+	// Handle namespaces
+	namespaces, err := getNamespacesToScan()
+	if err != nil {
+		return nil, err
+	}
+
+	// Scan namespaces or all projects
+	if len(namespaces) == 0 {
+		result, err := scanner.ScanRepositories(ctx, scanOptions, progressReporter)
+		if err != nil {
+			return nil, fmt.Errorf("scan failed: %w", err)
+		}
+		return result.RepositoryStats, nil
+	}
+
+	// Scan specific namespaces
+	return scanNamespaces(ctx, scanner, scanOptions, progressReporter, namespaces)
+}
+
+// createProgressReporter creates the appropriate progress reporter
+func createProgressReporter() ui.ProgressReporter {
+	if output == "Table" || debug {
+		return ui.NewConsoleProgress()
+	}
+	return ui.NewQuietProgress()
+}
+
+// getNamespacesToScan returns the list of namespaces to scan
+func getNamespacesToScan() ([]string, error) {
+	if input != "" {
+		namespaces, err := readLinesFromFile(input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read namespaces from file %s: %w", input, err)
+		}
+		if debug {
+			fmt.Printf("Read %d namespaces from file: %s\n", len(namespaces), input)
+		}
+		return namespaces, nil
+	}
+
+	if namespace != "" {
+		if debug {
+			fmt.Printf("Scanning namespace: %s\n", namespace)
+		}
+		return []string{namespace}, nil
+	}
+
+	return nil, nil
+}
+
+// scanSpecificRepositories scans a list of specific repositories
+func scanSpecificRepositories(ctx context.Context, client *api.RestClient) ([]*models.RepositoryStats, error) {
+	repositories, err := readLinesFromFile(repoList)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read repositories from file %s: %w", repoList, err)
+	}
+
+	if debug {
+		fmt.Printf("Read %d repositories from file: %s\n", len(repositories), repoList)
+	}
+
+	var allStats []*models.RepositoryStats
+	for _, repoPath := range repositories {
+		if debug {
+			fmt.Printf("Scanning repository: %s\n", repoPath)
+		}
+
+		if strings.Count(repoPath, "/") < 1 {
+			fmt.Printf("Warning: Invalid repository path format: %s (expected namespace/project)\n", repoPath)
+			continue
+		}
+
+		project, err := client.GetProject(ctx, repoPath)
+		if err != nil {
+			fmt.Printf("Warning: Failed to get project %s: %v\n", repoPath, err)
+			continue
+		}
+
+		stats, err := client.GetProjectStatistics(ctx, project.ID)
+		if err != nil {
+			fmt.Printf("Warning: Failed to get statistics for %s: %v\n", repoPath, err)
+			continue
+		}
+
+		repoStats := services.ConvertToRepoStats(project, stats)
+		allStats = append(allStats, repoStats)
+	}
+
+	return allStats, nil
+}
+
+// scanNamespaces scans specific namespaces and returns results
+func scanNamespaces(ctx context.Context, scanner *services.Scanner, scanOptions *models.ScanOptions, progressReporter ui.ProgressReporter, namespaces []string) ([]*models.RepositoryStats, error) {
+	var allStats []*models.RepositoryStats
+
+	for _, ns := range namespaces {
+		if debug {
+			fmt.Printf("Processing namespace: %s\n", ns)
+		}
+
+		result, err := scanner.ScanRepositories(ctx, scanOptions, progressReporter)
+		if err != nil {
+			return nil, fmt.Errorf("scan failed for namespace %s: %w", ns, err)
+		}
+
+		// Filter results by namespace
+		for _, stat := range result.RepositoryStats {
+			if ns == "" || stat.Namespace == ns {
+				allStats = append(allStats, stat)
+			}
+		}
+	}
+
+	return allStats, nil
+}
+
+// writeOutput writes the scan results to the appropriate output format
+func writeOutput(allStats []*models.RepositoryStats) error {
+	if output == "Table" {
+		return outputTable(allStats)
+	}
+
+	// CSV output
+	outputFile := fmt.Sprintf("gitlab-stats-%s.csv", time.Now().Format("2006-01-02-15-04-05"))
+	formatter, err := ui.NewFormatter("csv")
+	if err != nil {
+		return fmt.Errorf("failed to create formatter: %w", err)
+	}
+
+	if err := formatter.WriteToFile(allStats, outputFile); err != nil {
+		return fmt.Errorf("failed to write output: %w", err)
+	}
+
+	fmt.Printf("\nScan completed successfully!\n")
+	fmt.Printf("Total repositories processed: %d\n", len(allStats))
+	fmt.Printf("Output written to: %s\n", outputFile)
+	return nil
+}
+
+// outputTable outputs the results in table format
+func outputTable(stats []*models.RepositoryStats) error {
+	if len(stats) == 0 {
+		fmt.Println("No repositories found.")
+		return nil
+	}
+
+	// Table header
+	fmt.Printf("%-30s %-30s %-10s %-15s %-15s %-10s %-10s %-15s %-10s %-10s\n",
+		"Namespace", "Repository", "Empty", "Size(MB)", "LFS(MB)", "Commits", "Issues", "MRs", "Branches", "Tags")
+	fmt.Println(strings.Repeat("-", 155))
+
+	// Table rows
+	for _, stat := range stats {
+		fmt.Printf("%-30s %-30s %-10v %-15.2f %-15.2f %-10d %-10d %-15d %-10d %-10d\n",
+			truncate(stat.Namespace, 30),
+			truncate(stat.RepoName, 30),
+			stat.IsEmpty,
+			stat.RepoSizeMB,
+			stat.LFSSizeMB,
+			stat.RecordCount,
+			stat.IssueCount,
+			stat.PRCount,
+			stat.BranchCount,
+			stat.TagCount)
+	}
+
+	fmt.Printf("\nTotal repositories: %d\n", len(stats))
+	return nil
+}
+
+// truncate truncates a string to a maximum length
+func truncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	return s[:maxLen-3] + "..."
 }

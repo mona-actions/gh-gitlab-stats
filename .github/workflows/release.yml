@@ -1,17 +1,15 @@
 name: release
 on:
- workflow_dispatch:
- push:
-   tags:
-     - "v*"
+  push:
+    tags:
+      - "v*"
 permissions:
   contents: write
-
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 #v4.1.0
-      - uses: cli/gh-extension-precompile@640911b0a0f2adb89a07a8ba547053cbd4001e1e #v1.3.1
+      - uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b #v4.1.4
+      - uses: cli/gh-extension-precompile@561b19deda1228a0edf856c3325df87416f8c9bd #v2.0.0
         with:
-          go_version: "1.21"
+          go_version_file: go.mod
