@@ -46,7 +46,6 @@ type ProjectStatistics struct {
 	MergeRequestReviewCount  int    `json:"-"` // Number of MR reviews/approvals (computed)
 	MergeRequestCommentCount int    `json:"-"` // Total comments on merge requests (computed)
 	IssueCommentCount        int    `json:"-"` // Total comments on issues (computed)
-	CommitCommentCount       int    `json:"-"` // Total comments on commits (computed)
 }
 
 // Branch represents a GitLab branch

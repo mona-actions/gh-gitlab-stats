@@ -51,14 +51,14 @@ gh extension install mona-actions/gh-gitlab-stats
 ### 2. Run Your First Scan
 
 ```bash
-# Scan GitLab.com (all accessible projects)
+# Scan GitLab.com (all accessible projects) - saves CSV to timestamped file
 ./gh-gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN
 
 # Scan self-hosted GitLab
 ./gh-gitlab-stats --hostname gitlab.company.com --token YOUR_GITLAB_TOKEN
 
-# Specify output file
-./gh-gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN --output my-stats.csv
+# Display results as table in console
+./gh-gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN --output Table
 ```
 
 ## Usage
@@ -69,27 +69,27 @@ gh extension install mona-actions/gh-gitlab-stats
 # Show help
 ./gh-gitlab-stats --help
 
-# Scan with verbose output
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --verbose
+# Scan with debug output (detailed logging)
+./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
 
-# Use different output format
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --format json --output report.json
+# Use table output format (display in console)
+./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output Table
 
-# Specify custom output file
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output my-report.csv
+# Use CSV output format (default - saves to timestamped file)
+./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output CSV
 ```
 
 ### Command-Line Options
 
-| Flag              | Description                                   | Default      |
-| ----------------- | --------------------------------------------- | ------------ |
-| `--token, -t`     | GitLab access token (required)                |              |
-| `--hostname, -H`  | GitLab hostname                               | `gitlab.com` |
-| `--output, -O`    | Output format (CSV or Table)                  | `CSV`        |
-| `--debug, -d`     | Enable debug logging with detailed progress   | `false`      |
-| `--namespace, -n` | GitLab namespace/group to analyze             |              |
-| `--input, -i`     | File with list of namespaces (one per line)   |              |
-| `--repo-list`     | File with list of repositories (one per line) |              |
+| Flag              | Description                                                  | Default      |
+| ----------------- | ------------------------------------------------------------ | ------------ |
+| `--token, -t`     | GitLab access token (required)                               |              |
+| `--hostname, -H`  | GitLab hostname (without https:// prefix)                    | `gitlab.com` |
+| `--output, -O`    | Output format: `CSV` (timestamped file) or `Table` (console) | `CSV`        |
+| `--debug, -d`     | Enable debug logging with detailed progress                  | `false`      |
+| `--namespace, -n` | GitLab namespace/group to analyze (e.g., "mygroup/subgroup") |              |
+| `--input, -i`     | File with list of namespaces (one per line)                  |              |
+| `--repo-list`     | File with list of repositories in "namespace/project" format |              |
 
 ## Configuration
 
@@ -123,7 +123,6 @@ The tool generates CSV output with comprehensive GitLab project statistics:
 | `MR_Count`                | Integer   | Number of merge requests (all states)        | API: `/merge_requests` endpoint      |
 | `MR_Review_Comment_Count` | Integer   | Total comments on all merge requests         | API: MR `user_notes_count` sum       |
 | `Commit_Count`            | Integer   | Total number of commits                      | API: `statistics.commit_count`       |
-| `Commit_Comment_Count`    | Integer   | Number of commit comments                    | Computed (typically 0)               |
 | `Issue_Comment_Count`     | Integer   | Total comments on all issues                 | API: Issue `user_notes_count` sum    |
 | `Release_Count`           | Integer   | Number of releases                           | API: `/releases` endpoint            |
 | `Branch_Count`            | Integer   | Number of branches                           | API: `/repository/branches` endpoint |
@@ -145,9 +144,9 @@ The tool generates CSV output with comprehensive GitLab project statistics:
 ### Sample Output
 
 ```csv
-Namespace,Project,Is_Empty,isFork,isArchive,Project_Size(mb),LFS_Size(mb),Collaborator_Count,Protected_Branch_Count,MR_Review_Count,Milestone_Count,Issue_Count,MR_Count,MR_Review_Comment_Count,Commit_Count,Commit_Comment_Count,Issue_Comment_Count,Release_Count,Branch_Count,Tag_Count,Has_Wiki,Full_URL,Created,Last_Push,Last_Update
-mygroup,awesome-project,false,false,false,250,1024,8,2,12,3,23,15,45,150,0,128,2,15,8,true,https://gitlab.com/mygroup/awesome-project,2023-01-15T10:00:00Z,2023-10-10T15:30:00Z,2023-10-10T15:30:00Z
-mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,0,35,1,8,3,false,https://gitlab.com/mygroup/subgroup/another-project,2023-03-20T14:22:00Z,2023-10-09T08:15:00Z,2023-10-09T08:15:00Z
+Namespace,Project,Is_Empty,isFork,isArchive,Project_Size(mb),LFS_Size(mb),Collaborator_Count,Protected_Branch_Count,MR_Review_Count,Milestone_Count,Issue_Count,MR_Count,MR_Review_Comment_Count,Commit_Count,Issue_Comment_Count,Release_Count,Branch_Count,Tag_Count,Has_Wiki,Full_URL,Created,Last_Push,Last_Update
+mygroup,awesome-project,false,false,false,250,1024,8,2,12,3,23,15,45,150,128,2,15,8,true,https://gitlab.com/mygroup/awesome-project,2023-01-15T10:00:00Z,2023-10-10T15:30:00Z,2023-10-10T15:30:00Z
+mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8,3,false,https://gitlab.com/mygroup/subgroup/another-project,2023-03-20T14:22:00Z,2023-10-09T08:15:00Z,2023-10-09T08:15:00Z
 ```
 
 ## Examples
@@ -176,10 +175,10 @@ mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,0,35,1
 ### Output Formats
 
 ```bash
-# CSV output (default) - saved to timestamped file
+# CSV output (default) - saved to timestamped file like gitlab-stats-2025-10-10-14-24-27.csv
 ./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output CSV
 
-# Table output (console display)
+# Table output (console display) - prints formatted table to stdout
 ./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output Table
 ```
 

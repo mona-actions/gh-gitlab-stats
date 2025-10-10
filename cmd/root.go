@@ -18,7 +18,6 @@ import (
 
 var (
 	cfgFile string
-	verbose bool
 )
 
 var (
@@ -62,13 +61,13 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Command flags matching the specification
-	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable Debug logging")
-	rootCmd.Flags().StringVarP(&hostname, "hostname", "H", "gitlab.com", "The GitLab hostname for the request")
-	rootCmd.Flags().StringVarP(&input, "input", "i", "", "Set path to a file with a list of namespaces to scan, one per line, newline delimited")
-	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Name of the GitLab namespace to be analyzed")
-	rootCmd.Flags().StringVarP(&output, "output", "O", "CSV", "Format of output, can either be \"CSV\" or \"Table\"")
-	rootCmd.Flags().StringVar(&repoList, "repo-list", "", "Path to a file with a list of repositories to scan, one per line, newline delimited")
-	rootCmd.Flags().StringVarP(&token, "token", "t", "", "Set Personal Access Token for GitLab API")
+	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging with detailed progress output")
+	rootCmd.Flags().StringVarP(&hostname, "hostname", "H", "gitlab.com", "GitLab hostname (without https:// prefix)")
+	rootCmd.Flags().StringVarP(&input, "input", "i", "", "Path to file with list of namespaces to scan (one per line)")
+	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "GitLab namespace/group to analyze (e.g., \"mygroup/subgroup\")")
+	rootCmd.Flags().StringVarP(&output, "output", "O", "csv", "Output format: \"csv\" (timestamped file) or \"table\" (console)")
+	rootCmd.Flags().StringVar(&repoList, "repo-list", "", "Path to file with list of repositories in \"namespace/project\" format (one per line)")
+	rootCmd.Flags().StringVarP(&token, "token", "t", "", "GitLab Personal Access Token (required)")
 
 	// Mark required flags
 	rootCmd.MarkFlagRequired("token")
@@ -102,6 +101,9 @@ func initConfig() {
 
 // runGLRepoStats is the main function that executes the GitLab repository statistics collection
 func runGLRepoStats(cmd *cobra.Command, args []string) error {
+	// Normalize output format to lowercase for consistent internal use
+	output = strings.ToLower(output)
+
 	if debug {
 		fmt.Println("Debug mode enabled")
 	}
@@ -124,7 +126,7 @@ func runGLRepoStats(cmd *cobra.Command, args []string) error {
 	scanOptions := &models.ScanOptions{
 		GitLabURL:       gitlabURL,
 		Token:           token,
-		OutputFormat:    strings.ToLower(output),
+		OutputFormat:    output, // Already normalized to lowercase
 		Verbose:         debug,
 		IncludeArchived: true,
 		MaxProjects:     0,
@@ -146,8 +148,8 @@ func validateInputs() error {
 	if token == "" {
 		return fmt.Errorf("GitLab token is required. Use -t or --token flag")
 	}
-	if output != "CSV" && output != "Table" {
-		return fmt.Errorf("invalid output format: %s. Must be 'CSV' or 'Table'", output)
+	if output != "csv" && output != "table" {
+		return fmt.Errorf("invalid output format: %s. Must be 'csv' or 'table'", output)
 	}
 	return nil
 }
@@ -209,7 +211,7 @@ func executeScan(ctx context.Context, client *api.RestClient, scanner *services.
 
 // createProgressReporter creates the appropriate progress reporter
 func createProgressReporter() ui.ProgressReporter {
-	if output == "Table" || debug {
+	if output == "table" || debug {
 		return ui.NewConsoleProgress()
 	}
 	return ui.NewQuietProgress()
@@ -306,7 +308,7 @@ func scanNamespaces(ctx context.Context, scanner *services.Scanner, scanOptions 
 
 // writeOutput writes the scan results to the appropriate output format
 func writeOutput(allStats []*models.RepositoryStats) error {
-	if output == "Table" {
+	if output == "table" {
 		return outputTable(allStats)
 	}
 

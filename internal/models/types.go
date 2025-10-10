@@ -20,7 +20,6 @@ type RepositoryStats struct {
 	PRCount              int        `csv:"PR_Count"`
 	PRReviewCommentCount int        `csv:"PR_Review_Comment_Count"`
 	CommitCount          int        `csv:"Commit_Count"`
-	CommitCommentCount   int        `csv:"Commit_Comment_Count"`
 	IssueCommentCount    int        `csv:"Issue_Comment_Count"`
 	ReleaseCount         int        `csv:"Release_Count"`
 	BranchCount          int        `csv:"Branch_Count"`

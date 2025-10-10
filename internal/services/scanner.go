@@ -225,8 +225,8 @@ func (s *Scanner) processProject(ctx context.Context, project *api.Project, verb
 			stats.BranchCount, stats.TagCount, stats.MemberCount, stats.IssueCount, stats.MergeRequestCount)
 		fmt.Printf("    ✓ Reviews: MR Reviews(%d) | Commits(%d)\n",
 			stats.MergeRequestReviewCount, stats.CommitCount)
-		fmt.Printf("    ✓ Comments: MR(%d), Issue(%d), Commit(%d)\n",
-			stats.MergeRequestCommentCount, stats.IssueCommentCount, stats.CommitCommentCount)
+		fmt.Printf("    ✓ Comments: MR(%d), Issue(%d)\n",
+			stats.MergeRequestCommentCount, stats.IssueCommentCount)
 	}
 
 	return ConvertToRepoStats(project, stats), nil
@@ -253,7 +253,6 @@ func ConvertToRepoStats(project *api.Project, stats *api.ProjectStatistics) *mod
 		PRCount:              stats.MergeRequestCount,
 		PRReviewCommentCount: stats.MergeRequestCommentCount,
 		CommitCount:          stats.CommitCount,
-		CommitCommentCount:   stats.CommitCommentCount,
 		IssueCommentCount:    stats.IssueCommentCount,
 		ReleaseCount:         stats.ReleaseCount,
 		BranchCount:          stats.BranchCount,

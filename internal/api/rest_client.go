@@ -356,12 +356,6 @@ func (c *RestClient) GetProjectStatistics(ctx context.Context, projectID interfa
 		project.Statistics.IssueCommentCount = issueCommentCount
 	}
 
-	// Get commit comment count (usually 0, expensive to calculate)
-	commitCommentCount, err := c.getCommitCommentCount(ctx, projectID)
-	if err == nil {
-		project.Statistics.CommitCommentCount = commitCommentCount
-	}
-
 	return project.Statistics, nil
 }
 
@@ -591,43 +585,4 @@ func (c *RestClient) getIssueCommentCount(ctx context.Context, projectID interfa
 	}
 
 	return totalNotes, nil
-}
-
-// getCommitCommentCount gets the total count of comments on commits
-func (c *RestClient) getCommitCommentCount(ctx context.Context, projectID interface{}) (int, error) {
-	// Commit comments in GitLab are less common, but we can get them from commits
-	// This is expensive, so we'll sample the first few pages of commits
-	totalComments := 0
-	commitParams := url.Values{}
-	commitParams.Set("per_page", "100")
-
-	for page := 1; page <= 5; page++ { // Sample first 500 commits
-		commitParams.Set("page", strconv.Itoa(page))
-		commitPath := fmt.Sprintf("/projects/%v/repository/commits", projectID)
-		commitBody, _, err := c.doRequest(ctx, "GET", commitPath, commitParams)
-		if err != nil {
-			break
-		}
-
-		var pageCommits []map[string]interface{}
-		if err := json.Unmarshal(commitBody, &pageCommits); err != nil {
-			break
-		}
-
-		if len(pageCommits) == 0 {
-			break
-		}
-
-		// For each commit, we'd need to check for comments, but this is very expensive
-		// Instead, we'll count commits with committer_name != author_name as potential reviewed commits
-		// This is an approximation since GitLab doesn't provide direct commit comment counts
-
-		if len(pageCommits) < 100 {
-			break
-		}
-	}
-
-	// For now, return 0 as commit comments are rare and expensive to count
-	// Could be enhanced later if needed
-	return totalComments, nil
 }

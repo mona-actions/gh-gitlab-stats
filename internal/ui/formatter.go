@@ -83,7 +83,6 @@ func getCSVHeaders() []string {
 		"MR_Count",
 		"MR_Review_Comment_Count",
 		"Commit_Count",
-		"Commit_Comment_Count",
 		"Issue_Comment_Count",
 		"Release_Count",
 		"Branch_Count",
@@ -114,7 +113,6 @@ func convertToCSVRow(stat *models.RepositoryStats) []string {
 		fmt.Sprintf("%d", stat.PRCount),              // MR_Count
 		fmt.Sprintf("%d", stat.PRReviewCommentCount), // MR_Review_Comment_Count
 		fmt.Sprintf("%d", stat.CommitCount),          // Commit_Count
-		fmt.Sprintf("%d", stat.CommitCommentCount),   // Commit_Comment_Count
 		fmt.Sprintf("%d", stat.IssueCommentCount),    // Issue_Comment_Count
 		fmt.Sprintf("%d", stat.ReleaseCount),
 		fmt.Sprintf("%d", stat.BranchCount),
