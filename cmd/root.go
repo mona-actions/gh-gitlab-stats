@@ -67,13 +67,18 @@ func init() {
 	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "GitLab namespace/group to analyze (e.g., \"mygroup/subgroup\")")
 	rootCmd.Flags().StringVarP(&output, "output", "O", "csv", "Output format: \"csv\" (timestamped file) or \"table\" (console)")
 	rootCmd.Flags().StringVar(&repoList, "repo-list", "", "Path to file with list of repositories in \"namespace/project\" format (one per line)")
-	rootCmd.Flags().StringVarP(&token, "token", "t", "", "GitLab Personal Access Token (required)")
-
-	// Mark required flags
-	rootCmd.MarkFlagRequired("token")
+	rootCmd.Flags().StringVarP(&token, "token", "t", "", "GitLab Personal Access Token (required, or set GITLAB_TOKEN env var)")
 
 	// Bind flags to viper
 	viper.BindPFlag("debug", rootCmd.Flags().Lookup("debug"))
+	viper.BindPFlag("hostname", rootCmd.Flags().Lookup("hostname"))
+	viper.BindPFlag("token", rootCmd.Flags().Lookup("token"))
+	viper.BindPFlag("namespace", rootCmd.Flags().Lookup("namespace"))
+	viper.BindPFlag("output", rootCmd.Flags().Lookup("output"))
+
+	// Set environment variable prefix and bindings
+	viper.SetEnvPrefix("GITLAB")
+	viper.BindEnv("token") // Binds to GITLAB_TOKEN
 } // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	if cfgFile != "" {
@@ -101,6 +106,18 @@ func initConfig() {
 
 // runGLRepoStats is the main function that executes the GitLab repository statistics collection
 func runGLRepoStats(cmd *cobra.Command, args []string) error {
+	// Get token from viper (supports flag, env var, or config file)
+	if token == "" {
+		token = viper.GetString("token")
+	}
+
+	// Get other values from viper if not set via flags
+	if hostname == "" || hostname == "gitlab.com" {
+		if viperHostname := viper.GetString("hostname"); viperHostname != "" {
+			hostname = viperHostname
+		}
+	}
+
 	// Normalize output format to lowercase for consistent internal use
 	output = strings.ToLower(output)
 
@@ -122,19 +139,9 @@ func runGLRepoStats(cmd *cobra.Command, args []string) error {
 
 	scanner := services.NewScanner(client)
 
-	// Prepare scan options
-	scanOptions := &models.ScanOptions{
-		GitLabURL:       gitlabURL,
-		Token:           token,
-		OutputFormat:    output, // Already normalized to lowercase
-		Verbose:         debug,
-		IncludeArchived: true,
-		MaxProjects:     0,
-	}
-
 	// Run scan
 	fmt.Printf("Starting GitLab repository statistics collection...\n")
-	allStats, err := executeScan(cmd.Context(), client, scanner, scanOptions)
+	allStats, err := executeScan(cmd.Context(), client, scanner, gitlabURL, output, debug)
 	if err != nil {
 		return err
 	}
@@ -146,7 +153,7 @@ func runGLRepoStats(cmd *cobra.Command, args []string) error {
 // validateInputs validates command-line flags
 func validateInputs() error {
 	if token == "" {
-		return fmt.Errorf("GitLab token is required. Use -t or --token flag")
+		return fmt.Errorf("GitLab token is required. Use --token flag or set GITLAB_TOKEN environment variable")
 	}
 	if output != "csv" && output != "table" {
 		return fmt.Errorf("invalid output format: %s. Must be 'csv' or 'table'", output)
@@ -182,7 +189,7 @@ func readLinesFromFile(filename string) ([]string, error) {
 }
 
 // executeScan performs the repository scan based on input parameters
-func executeScan(ctx context.Context, client *api.RestClient, scanner *services.Scanner, scanOptions *models.ScanOptions) ([]*models.RepositoryStats, error) {
+func executeScan(ctx context.Context, client *api.RestClient, scanner *services.Scanner, gitlabURL, outputFormat string, verbose bool) ([]*models.RepositoryStats, error) {
 	progressReporter := createProgressReporter()
 
 	// Handle specific repository list
@@ -196,8 +203,16 @@ func executeScan(ctx context.Context, client *api.RestClient, scanner *services.
 		return nil, err
 	}
 
-	// Scan namespaces or all projects
+	// Scan with server-side filtering for namespaces
 	if len(namespaces) == 0 {
+		// No namespace filter - scan all accessible projects
+		scanOptions := &models.ScanOptions{
+			GitLabURL:    gitlabURL,
+			Token:        token,
+			OutputFormat: outputFormat,
+			Verbose:      verbose,
+			MaxProjects:  0,
+		}
 		result, err := scanner.ScanRepositories(ctx, scanOptions, progressReporter)
 		if err != nil {
 			return nil, fmt.Errorf("scan failed: %w", err)
@@ -205,8 +220,8 @@ func executeScan(ctx context.Context, client *api.RestClient, scanner *services.
 		return result.RepositoryStats, nil
 	}
 
-	// Scan specific namespaces
-	return scanNamespaces(ctx, scanner, scanOptions, progressReporter, namespaces)
+	// Scan specific namespaces with server-side filtering
+	return scanNamespaces(ctx, scanner, gitlabURL, outputFormat, verbose, progressReporter, namespaces)
 }
 
 // createProgressReporter creates the appropriate progress reporter
@@ -282,12 +297,23 @@ func scanSpecificRepositories(ctx context.Context, client *api.RestClient) ([]*m
 }
 
 // scanNamespaces scans specific namespaces and returns results
-func scanNamespaces(ctx context.Context, scanner *services.Scanner, scanOptions *models.ScanOptions, progressReporter ui.ProgressReporter, namespaces []string) ([]*models.RepositoryStats, error) {
+// Uses server-side filtering for efficiency - no client-side filtering needed
+func scanNamespaces(ctx context.Context, scanner *services.Scanner, gitlabURL, outputFormat string, verbose bool, progressReporter ui.ProgressReporter, namespaces []string) ([]*models.RepositoryStats, error) {
 	var allStats []*models.RepositoryStats
 
 	for _, ns := range namespaces {
-		if debug {
-			fmt.Printf("Processing namespace: %s\n", ns)
+		if verbose {
+			fmt.Printf("Processing namespace: %s (using server-side filtering)\n", ns)
+		}
+
+		// Create scan options with namespace for server-side filtering
+		scanOptions := &models.ScanOptions{
+			GitLabURL:    gitlabURL,
+			Token:        token,
+			Namespace:    ns, // Server-side filtering by namespace
+			OutputFormat: outputFormat,
+			Verbose:      verbose,
+			MaxProjects:  0,
 		}
 
 		result, err := scanner.ScanRepositories(ctx, scanOptions, progressReporter)
@@ -295,12 +321,8 @@ func scanNamespaces(ctx context.Context, scanner *services.Scanner, scanOptions 
 			return nil, fmt.Errorf("scan failed for namespace %s: %w", ns, err)
 		}
 
-		// Filter results by namespace
-		for _, stat := range result.RepositoryStats {
-			if ns == "" || stat.Namespace == ns {
-				allStats = append(allStats, stat)
-			}
-		}
+		// No client-side filtering needed - server already filtered by namespace
+		allStats = append(allStats, result.RepositoryStats...)
 	}
 
 	return allStats, nil

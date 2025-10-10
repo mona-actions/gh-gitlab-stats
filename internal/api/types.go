@@ -99,3 +99,11 @@ type Release struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 }
+
+// Group represents a GitLab group/namespace
+type Group struct {
+	ID       int    `json:"id"`
+	Name     string `json:"name"`
+	Path     string `json:"path"`
+	FullPath string `json:"full_path"`
+}

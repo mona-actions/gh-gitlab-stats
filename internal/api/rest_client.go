@@ -16,6 +16,7 @@ type GitLabClient interface {
 	ListProjects(ctx context.Context, options *ListProjectsOptions) ([]*Project, error)
 	GetProject(ctx context.Context, projectID interface{}) (*Project, error)
 	GetProjectStatistics(ctx context.Context, projectID interface{}) (*ProjectStatistics, error)
+	GetGroupByPath(ctx context.Context, groupPath string) (*Group, error)
 }
 
 // ListProjectsOptions contains options for listing projects
@@ -582,4 +583,24 @@ func (c *RestClient) getIssueCommentCount(ctx context.Context, projectID interfa
 	}
 
 	return totalNotes, nil
+}
+
+// GetGroupByPath retrieves a group by its full path (e.g., "mygroup" or "mygroup/subgroup")
+// This is used to resolve namespace names to group IDs for efficient filtering
+func (c *RestClient) GetGroupByPath(ctx context.Context, groupPath string) (*Group, error) {
+	// URL-encode the group path (GitLab API requires path to be URL-encoded)
+	encodedPath := url.PathEscape(groupPath)
+	path := fmt.Sprintf("/groups/%s", encodedPath)
+
+	body, _, err := c.doRequest(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get group %s: %w", groupPath, err)
+	}
+
+	var group Group
+	if err := json.Unmarshal(body, &group); err != nil {
+		return nil, fmt.Errorf("failed to parse group response: %w", err)
+	}
+
+	return &group, nil
 }

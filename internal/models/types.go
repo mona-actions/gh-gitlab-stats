@@ -32,14 +32,14 @@ type RepositoryStats struct {
 
 // ScanOptions represents the options for scanning GitLab
 type ScanOptions struct {
-	GitLabURL       string
-	Token           string
-	GroupID         *int
-	OutputFormat    string
-	OutputFile      string
-	Verbose         bool
-	IncludeArchived bool
-	MaxProjects     int
+	GitLabURL    string
+	Token        string
+	GroupID      *int
+	Namespace    string // Namespace/group path for filtering (e.g., "mygroup/subgroup")
+	OutputFormat string
+	OutputFile   string
+	Verbose      bool
+	MaxProjects  int
 }
 
 // ScanResult represents the result of a GitLab scan operation

@@ -131,8 +131,23 @@ done:
 
 // getProjects retrieves the list of projects to scan
 func (s *Scanner) getProjects(ctx context.Context, options *models.ScanOptions) ([]*api.Project, error) {
-	// When no GroupID is specified, we want to get ALL accessible projects
-	// By default (without Membership parameter), GitLab returns all projects visible to the user
+	// Resolve namespace to group ID if provided
+	var groupID *int
+	if options.Namespace != "" {
+		if options.Verbose {
+			fmt.Printf("DEBUG: Resolving namespace '%s' to group ID...\n", options.Namespace)
+		}
+		group, err := s.client.GetGroupByPath(ctx, options.Namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve namespace '%s': %w", options.Namespace, err)
+		}
+		groupID = &group.ID
+		if options.Verbose {
+			fmt.Printf("DEBUG: Resolved namespace '%s' to group ID %d\n", options.Namespace, group.ID)
+		}
+	} else if options.GroupID != nil {
+		groupID = options.GroupID
+	}
 
 	trueVal := true
 	listOptions := &api.ListProjectsOptions{
@@ -142,8 +157,11 @@ func (s *Scanner) getProjects(ctx context.Context, options *models.ScanOptions) 
 		Archived:   nil, // Get ALL projects (both archived and non-archived)
 	}
 
-	if options.GroupID != nil {
-		listOptions.GroupID = options.GroupID
+	if groupID != nil {
+		listOptions.GroupID = groupID
+		if options.Verbose {
+			fmt.Printf("DEBUG: Filtering projects by group ID: %d\n", *groupID)
+		}
 	}
 
 	var allProjects []*api.Project
