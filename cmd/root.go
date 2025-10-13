@@ -66,7 +66,7 @@ func init() {
 	rootCmd.Flags().StringVarP(&input, "input", "i", "", "Path to file with list of namespaces to scan (one per line)")
 	rootCmd.Flags().StringVarP(&namespace, "namespace", "n", "", "GitLab namespace/group to analyze (e.g., \"mygroup/subgroup\")")
 	rootCmd.Flags().StringVarP(&output, "output", "O", "csv", "Output format: \"csv\" (timestamped file) or \"table\" (console)")
-	rootCmd.Flags().StringVar(&repoList, "repo-list", "", "Path to file with list of repositories in \"namespace/project\" format (one per line)")
+	rootCmd.Flags().StringVarP(&repoList, "repo-list", "r", "", "Path to file with list of repositories in \"namespace/project\" format (one per line)")
 	rootCmd.Flags().StringVarP(&token, "token", "t", "", "GitLab Personal Access Token (required, or set GITLAB_TOKEN env var)")
 
 	// Bind flags to viper

@@ -59,6 +59,14 @@ func NewRestClient(baseURL, token string) (*RestClient, error) {
 	}, nil
 }
 
+// encodeProjectID URL-encodes a project ID if it's a string (project path), otherwise converts to string
+func (c *RestClient) encodeProjectID(projectID interface{}) string {
+	if str, ok := projectID.(string); ok {
+		return url.PathEscape(str)
+	}
+	return fmt.Sprintf("%v", projectID)
+}
+
 // doRequest performs an HTTP request with authentication
 func (c *RestClient) doRequest(ctx context.Context, method, path string, params url.Values) ([]byte, *http.Response, error) {
 	// Build full URL
@@ -98,7 +106,7 @@ func (c *RestClient) doRequest(ctx context.Context, method, path string, params 
 	return body, resp, nil
 }
 
-// ListProjects implements the GET /projects endpoint
+// ListProjects implements the GET /projects endpoint or GET /groups/:id/projects for group filtering
 func (c *RestClient) ListProjects(ctx context.Context, options *ListProjectsOptions) ([]*Project, error) {
 	params := url.Values{}
 	params.Set("page", strconv.Itoa(options.Page))
@@ -120,10 +128,19 @@ func (c *RestClient) ListProjects(ctx context.Context, options *ListProjectsOpti
 		params.Set("archived", strconv.FormatBool(*options.Archived))
 	}
 
-	// IMPORTANT: Don't set membership parameter to get all visible projects
-	// The GitLab API defaults to returning all visible projects when membership is not specified
+	// CRITICAL: Use different endpoint when filtering by group ID
+	var endpoint string
+	if options.GroupID != nil {
+		// Use the Groups API endpoint to list projects in a specific group
+		endpoint = fmt.Sprintf("/groups/%d/projects", *options.GroupID)
+		// IMPORTANT: Include projects from subgroups as well
+		params.Set("include_subgroups", "true")
+	} else {
+		// Use the general projects endpoint for all visible projects
+		endpoint = "/projects"
+	}
 
-	body, _, err := c.doRequest(ctx, "GET", "/projects", params)
+	body, _, err := c.doRequest(ctx, "GET", endpoint, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list projects: %w", err)
 	}
@@ -265,7 +282,8 @@ func (c *RestClient) GetProject(ctx context.Context, projectID interface{}) (*Pr
 	params := url.Values{}
 	params.Set("statistics", "true")
 
-	path := fmt.Sprintf("/projects/%v", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	path := fmt.Sprintf("/projects/%s", encodedProjectID)
 	body, _, err := c.doRequest(ctx, "GET", path, params)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get project: %w", err)
@@ -388,37 +406,44 @@ func (c *RestClient) getCountFromHeader(ctx context.Context, endpoint string, ex
 func (c *RestClient) getMergeRequestCount(ctx context.Context, projectID interface{}) (int, error) {
 	params := url.Values{}
 	params.Set("scope", "all")
-	endpoint := fmt.Sprintf("/projects/%v/merge_requests", projectID)
+
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
 	return c.getCountFromHeader(ctx, endpoint, params), nil
 }
 
 // getBranchCount gets the total count of branches for a project
 func (c *RestClient) getBranchCount(ctx context.Context, projectID interface{}) (int, error) {
-	endpoint := fmt.Sprintf("/projects/%v/repository/branches", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/repository/branches", encodedProjectID)
 	return c.getCountFromHeader(ctx, endpoint, nil), nil
 }
 
 // getTagCount gets the total count of tags for a project
 func (c *RestClient) getTagCount(ctx context.Context, projectID interface{}) (int, error) {
-	endpoint := fmt.Sprintf("/projects/%v/repository/tags", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/repository/tags", encodedProjectID)
 	return c.getCountFromHeader(ctx, endpoint, nil), nil
 }
 
 // getMemberCount gets the total count of members for a project
 func (c *RestClient) getMemberCount(ctx context.Context, projectID interface{}) (int, error) {
-	endpoint := fmt.Sprintf("/projects/%v/members/all", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/members/all", encodedProjectID)
 	return c.getCountFromHeader(ctx, endpoint, nil), nil
 }
 
 // getMilestoneCount gets the total count of milestones for a project
 func (c *RestClient) getMilestoneCount(ctx context.Context, projectID interface{}) (int, error) {
-	endpoint := fmt.Sprintf("/projects/%v/milestones", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/milestones", encodedProjectID)
 	return c.getCountFromHeader(ctx, endpoint, nil), nil
 }
 
 // getReleaseCount gets the total count of releases for a project
 func (c *RestClient) getReleaseCount(ctx context.Context, projectID interface{}) (int, error) {
-	endpoint := fmt.Sprintf("/projects/%v/releases", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/releases", encodedProjectID)
 	return c.getCountFromHeader(ctx, endpoint, nil), nil
 }
 
@@ -428,7 +453,8 @@ func (c *RestClient) hasWikiPages(ctx context.Context, projectID interface{}) bo
 	params.Set("per_page", "1")
 	params.Set("page", "1")
 
-	path := fmt.Sprintf("/projects/%v/wikis", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	path := fmt.Sprintf("/projects/%s/wikis", encodedProjectID)
 	body, _, err := c.doRequest(ctx, "GET", path, params)
 	if err != nil {
 		// If we get an error, assume no wiki (could be disabled or no access)
@@ -453,9 +479,10 @@ func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID i
 	mrParams.Set("scope", "all")
 	mrParams.Set("per_page", "100")
 
+	encodedProjectID := c.encodeProjectID(projectID)
 	for page := 1; page <= 10; page++ { // Limit to first 1000 MRs
 		mrParams.Set("page", strconv.Itoa(page))
-		mrPath := fmt.Sprintf("/projects/%v/merge_requests", projectID)
+		mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
 		mrBody, _, err := c.doRequest(ctx, "GET", mrPath, mrParams)
 		if err != nil {
 			break
@@ -515,9 +542,10 @@ func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID 
 	mrParams.Set("scope", "all")
 	mrParams.Set("per_page", "100")
 
+	encodedProjectID := c.encodeProjectID(projectID)
 	for page := 1; page <= 10; page++ { // Limit to first 1000 MRs
 		mrParams.Set("page", strconv.Itoa(page))
-		mrPath := fmt.Sprintf("/projects/%v/merge_requests", projectID)
+		mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
 		mrBody, _, err := c.doRequest(ctx, "GET", mrPath, mrParams)
 		if err != nil {
 			break
@@ -554,9 +582,10 @@ func (c *RestClient) getIssueCommentCount(ctx context.Context, projectID interfa
 	issueParams.Set("scope", "all")
 	issueParams.Set("per_page", "100")
 
+	encodedProjectID := c.encodeProjectID(projectID)
 	for page := 1; page <= 10; page++ { // Limit to first 1000 issues
 		issueParams.Set("page", strconv.Itoa(page))
-		issuePath := fmt.Sprintf("/projects/%v/issues", projectID)
+		issuePath := fmt.Sprintf("/projects/%s/issues", encodedProjectID)
 		issueBody, _, err := c.doRequest(ctx, "GET", issuePath, issueParams)
 		if err != nil {
 			break
