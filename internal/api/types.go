@@ -27,25 +27,23 @@ type Project struct {
 
 // ProjectStatistics represents project statistics from GitLab
 type ProjectStatistics struct {
-	ProjectID                int    `json:"project_id,omitempty"`
-	ProjectName              string `json:"project_name,omitempty"`
-	CommitCount              int    `json:"commit_count"`
-	StorageSize              int64  `json:"storage_size"`
-	RepositorySize           int64  `json:"repository_size"`
-	WikiSize                 int64  `json:"wiki_size"`
-	LFSObjectsSize           int64  `json:"lfs_objects_size"`
-	JobArtifactsSize         int64  `json:"job_artifacts_size"`
-	BranchCount              int    `json:"branch_count,omitempty"`
-	TagCount                 int    `json:"tag_count,omitempty"`
-	MemberCount              int    `json:"member_count,omitempty"`
-	IssueCount               int    `json:"issue_count,omitempty"`
-	MergeRequestCount        int    `json:"merge_request_count,omitempty"`
-	MilestoneCount           int    `json:"milestone_count,omitempty"`
-	ReleaseCount             int    `json:"release_count,omitempty"`
-	HasWikiPages             bool   `json:"-"` // Whether wiki actually has pages (not from API, computed)
-	MergeRequestReviewCount  int    `json:"-"` // Number of MR reviews/approvals (computed)
-	MergeRequestCommentCount int    `json:"-"` // Total comments on merge requests (computed)
-	IssueCommentCount        int    `json:"-"` // Total comments on issues (computed)
+	CommitCount              int   `json:"commit_count"`
+	StorageSize              int64 `json:"storage_size"`
+	RepositorySize           int64 `json:"repository_size"`
+	WikiSize                 int64 `json:"wiki_size"`
+	LFSObjectsSize           int64 `json:"lfs_objects_size"`
+	JobArtifactsSize         int64 `json:"job_artifacts_size"`
+	BranchCount              int   `json:"branch_count,omitempty"`
+	TagCount                 int   `json:"tag_count,omitempty"`
+	MemberCount              int   `json:"member_count,omitempty"`
+	IssueCount               int   `json:"issue_count,omitempty"`
+	MergeRequestCount        int   `json:"merge_request_count,omitempty"`
+	MilestoneCount           int   `json:"milestone_count,omitempty"`
+	ReleaseCount             int   `json:"release_count,omitempty"`
+	HasWikiPages             bool  `json:"-"` // Whether wiki actually has pages (not from API, computed)
+	MergeRequestReviewCount  int   `json:"-"` // Number of MR reviews/approvals (computed)
+	MergeRequestCommentCount int   `json:"-"` // Total comments on merge requests (computed)
+	IssueCommentCount        int   `json:"-"` // Total comments on issues (computed)
 }
 
 // Branch represents a GitLab branch

@@ -2,13 +2,11 @@ package ui
 
 import (
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
 	"github.com/mona-actions/gh-gitlab-stats/internal/models"
-	"gopkg.in/yaml.v3"
 )
 
 // Formatter interface for different output formats
@@ -21,12 +19,8 @@ func NewFormatter(format string) (Formatter, error) {
 	switch format {
 	case "csv":
 		return &CSVFormatter{}, nil
-	case "json":
-		return &JSONFormatter{}, nil
-	case "yaml":
-		return &YAMLFormatter{}, nil
 	default:
-		return nil, fmt.Errorf("unsupported format: %s", format)
+		return nil, fmt.Errorf("unsupported format: %s (only 'csv' is supported)", format)
 	}
 }
 
@@ -125,48 +119,6 @@ func convertToCSVRow(stat *models.RepositoryStats) []string {
 	}
 }
 
-// JSONFormatter formats output as JSON
-type JSONFormatter struct{}
-
-// WriteToFile writes repository statistics to a JSON file
-func (f *JSONFormatter) WriteToFile(stats []*models.RepositoryStats, filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", filename, err)
-	}
-	defer file.Close()
-
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-
-	if err := encoder.Encode(stats); err != nil {
-		return fmt.Errorf("failed to encode JSON: %w", err)
-	}
-
-	return nil
-}
-
-// YAMLFormatter formats output as YAML
-type YAMLFormatter struct{}
-
-// WriteToFile writes repository statistics to a YAML file
-func (f *YAMLFormatter) WriteToFile(stats []*models.RepositoryStats, filename string) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("failed to create file %s: %w", filename, err)
-	}
-	defer file.Close()
-
-	encoder := yaml.NewEncoder(file)
-	defer encoder.Close()
-
-	if err := encoder.Encode(stats); err != nil {
-		return fmt.Errorf("failed to encode YAML: %w", err)
-	}
-
-	return nil
-}
-
 // Helper functions
 
 func boolToString(b bool) string {
@@ -188,53 +140,6 @@ type ProgressReporter interface {
 	Start(total int)
 	Update(current int)
 	Finish()
-}
-
-// ConsoleProgress implements console-based progress reporting
-type ConsoleProgress struct {
-	total   int
-	current int
-	started time.Time
-}
-
-// NewConsoleProgress creates a new console progress reporter
-func NewConsoleProgress() *ConsoleProgress {
-	return &ConsoleProgress{}
-}
-
-// Start initializes the progress reporter
-func (p *ConsoleProgress) Start(total int) {
-	p.total = total
-	p.current = 0
-	p.started = time.Now()
-	fmt.Printf("Progress: 0/%d (0.0%%) - ETA: calculating...\n", total)
-}
-
-// Update updates the current progress
-func (p *ConsoleProgress) Update(current int) {
-	p.current = current
-
-	percentage := float64(current) / float64(p.total) * 100
-	elapsed := time.Since(p.started)
-
-	var eta string
-	if current > 0 {
-		totalEstimated := elapsed * time.Duration(p.total) / time.Duration(current)
-		remaining := totalEstimated - elapsed
-		eta = remaining.Round(time.Second).String()
-	} else {
-		eta = "calculating..."
-	}
-
-	fmt.Printf("\rProgress: %d/%d (%.1f%%) - Elapsed: %v - ETA: %s",
-		current, p.total, percentage, elapsed.Round(time.Second), eta)
-}
-
-// Finish completes the progress reporting
-func (p *ConsoleProgress) Finish() {
-	elapsed := time.Since(p.started)
-	fmt.Printf("\rProgress: %d/%d (100.0%%) - Completed in %v\n",
-		p.total, p.total, elapsed.Round(time.Second))
 }
 
 // QuietProgress implements a quiet progress reporter (no output)

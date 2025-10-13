@@ -5,10 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
+)
+
+const (
+	// DefaultPageSize is the default number of items per page for API requests
+	DefaultPageSize = 100
+	// MaxPagesPerQuery is the maximum number of pages to fetch for expensive operations
+	// to avoid excessive API calls (e.g., for MR comments, issue comments)
+	MaxPagesPerQuery = 10
+	// DefaultHTTPTimeout is the default timeout for HTTP requests
+	DefaultHTTPTimeout = 120 * time.Second
 )
 
 // GitLabClient interface defines the contract for GitLab API interactions
@@ -54,7 +65,7 @@ func NewRestClient(baseURL, token string) (*RestClient, error) {
 		baseURL: baseURL,
 		token:   token,
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second, // Increased timeout for large responses
+			Timeout: DefaultHTTPTimeout,
 		},
 	}, nil
 }
@@ -317,36 +328,48 @@ func (c *RestClient) GetProjectStatistics(ctx context.Context, projectID interfa
 	mrCount, err := c.getMergeRequestCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.MergeRequestCount = mrCount
+	} else {
+		log.Printf("Warning: Failed to get MR count for project %v: %v", projectID, err)
 	}
 
 	// Get branch count
 	branchCount, err := c.getBranchCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.BranchCount = branchCount
+	} else {
+		log.Printf("Warning: Failed to get branch count for project %v: %v", projectID, err)
 	}
 
 	// Get tag count
 	tagCount, err := c.getTagCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.TagCount = tagCount
+	} else {
+		log.Printf("Warning: Failed to get tag count for project %v: %v", projectID, err)
 	}
 
 	// Get member count
 	memberCount, err := c.getMemberCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.MemberCount = memberCount
+	} else {
+		log.Printf("Warning: Failed to get member count for project %v: %v", projectID, err)
 	}
 
 	// Get milestone count
 	milestoneCount, err := c.getMilestoneCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.MilestoneCount = milestoneCount
+	} else {
+		log.Printf("Warning: Failed to get milestone count for project %v: %v", projectID, err)
 	}
 
 	// Get release count
 	releaseCount, err := c.getReleaseCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.ReleaseCount = releaseCount
+	} else {
+		log.Printf("Warning: Failed to get release count for project %v: %v", projectID, err)
 	}
 
 	// Check if wiki actually has pages (only if wiki is enabled in settings)
@@ -361,18 +384,24 @@ func (c *RestClient) GetProjectStatistics(ctx context.Context, projectID interfa
 	mrReviewCount, err := c.getMergeRequestReviewCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.MergeRequestReviewCount = mrReviewCount
+	} else {
+		log.Printf("Warning: Failed to get MR review count for project %v: %v", projectID, err)
 	}
 
 	// Get merge request comment count
 	mrCommentCount, err := c.getMergeRequestCommentCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.MergeRequestCommentCount = mrCommentCount
+	} else {
+		log.Printf("Warning: Failed to get MR comment count for project %v: %v", projectID, err)
 	}
 
 	// Get issue comment count
 	issueCommentCount, err := c.getIssueCommentCount(ctx, projectID)
 	if err == nil {
 		project.Statistics.IssueCommentCount = issueCommentCount
+	} else {
+		log.Printf("Warning: Failed to get issue comment count for project %v: %v", projectID, err)
 	}
 
 	return project.Statistics, nil
@@ -477,10 +506,10 @@ func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID i
 	totalReviews := 0
 	mrParams := url.Values{}
 	mrParams.Set("scope", "all")
-	mrParams.Set("per_page", "100")
+	mrParams.Set("per_page", strconv.Itoa(DefaultPageSize))
 
 	encodedProjectID := c.encodeProjectID(projectID)
-	for page := 1; page <= 10; page++ { // Limit to first 1000 MRs
+	for page := 1; page <= MaxPagesPerQuery; page++ { // Limit to MaxPagesPerQuery * DefaultPageSize MRs
 		mrParams.Set("page", strconv.Itoa(page))
 		mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
 		mrBody, _, err := c.doRequest(ctx, "GET", mrPath, mrParams)
@@ -505,7 +534,7 @@ func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID i
 			}
 		}
 
-		if len(pageMRs) < 100 {
+		if len(pageMRs) < DefaultPageSize {
 			break
 		}
 	}
@@ -522,7 +551,8 @@ func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID 
 	params.Set("per_page", "1")
 	params.Set("page", "1")
 
-	path := fmt.Sprintf("/projects/%v/merge_requests", projectID)
+	encodedProjectID := c.encodeProjectID(projectID)
+	path := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
 	body, _, err := c.doRequest(ctx, "GET", path, params)
 	if err != nil {
 		return 0, err
@@ -536,14 +566,12 @@ func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID 
 
 	// For now, we'll use the user_notes_count field from MRs
 	// This requires fetching all MRs to sum up the notes
-	// To avoid excessive API calls, we'll get the first page and estimate
+	// To avoid excessive API calls, we limit to MaxPagesPerQuery pages
 	totalNotes := 0
 	mrParams := url.Values{}
 	mrParams.Set("scope", "all")
-	mrParams.Set("per_page", "100")
-
-	encodedProjectID := c.encodeProjectID(projectID)
-	for page := 1; page <= 10; page++ { // Limit to first 1000 MRs
+	mrParams.Set("per_page", strconv.Itoa(DefaultPageSize))
+	for page := 1; page <= MaxPagesPerQuery; page++ { // Limit to MaxPagesPerQuery * DefaultPageSize MRs
 		mrParams.Set("page", strconv.Itoa(page))
 		mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
 		mrBody, _, err := c.doRequest(ctx, "GET", mrPath, mrParams)
@@ -566,7 +594,7 @@ func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID 
 			}
 		}
 
-		if len(pageMRs) < 100 {
+		if len(pageMRs) < DefaultPageSize {
 			break
 		}
 	}
@@ -580,10 +608,10 @@ func (c *RestClient) getIssueCommentCount(ctx context.Context, projectID interfa
 	totalNotes := 0
 	issueParams := url.Values{}
 	issueParams.Set("scope", "all")
-	issueParams.Set("per_page", "100")
+	issueParams.Set("per_page", strconv.Itoa(DefaultPageSize))
 
 	encodedProjectID := c.encodeProjectID(projectID)
-	for page := 1; page <= 10; page++ { // Limit to first 1000 issues
+	for page := 1; page <= MaxPagesPerQuery; page++ { // Limit to MaxPagesPerQuery * DefaultPageSize issues
 		issueParams.Set("page", strconv.Itoa(page))
 		issuePath := fmt.Sprintf("/projects/%s/issues", encodedProjectID)
 		issueBody, _, err := c.doRequest(ctx, "GET", issuePath, issueParams)
@@ -606,7 +634,7 @@ func (c *RestClient) getIssueCommentCount(ctx context.Context, projectID interfa
 			}
 		}
 
-		if len(pageIssues) < 100 {
+		if len(pageIssues) < DefaultPageSize {
 			break
 		}
 	}

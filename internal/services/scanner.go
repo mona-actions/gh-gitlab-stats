@@ -10,6 +10,16 @@ import (
 	"github.com/mona-actions/gh-gitlab-stats/internal/api"
 	"github.com/mona-actions/gh-gitlab-stats/internal/models"
 	"github.com/mona-actions/gh-gitlab-stats/internal/ui"
+	"github.com/mona-actions/gh-gitlab-stats/internal/utils"
+)
+
+const (
+	// DefaultWorkerCount is the default number of parallel workers for scanning projects
+	DefaultWorkerCount = 5
+	// ProjectsPerPage is the number of projects to fetch per API request
+	ProjectsPerPage = 100
+	// ProtectedBranchRatio estimates that ~10% of non-default branches are protected
+	ProtectedBranchRatio = 10
 )
 
 // Scanner handles the scanning of GitLab repositories
@@ -45,7 +55,7 @@ func (s *Scanner) ScanRepositories(ctx context.Context, options *models.ScanOpti
 	fmt.Printf("✓ Found %d projects to scan\n", len(projects))
 	if options.Verbose {
 		fmt.Printf("  Using %d parallel workers for scanning\n", func() int {
-			numWorkers := 5
+			numWorkers := DefaultWorkerCount
 			if options.MaxProjects > 0 && options.MaxProjects < numWorkers {
 				numWorkers = options.MaxProjects
 			}
@@ -64,7 +74,7 @@ func (s *Scanner) ScanRepositories(ctx context.Context, options *models.ScanOpti
 
 	// Start workers
 	var wg sync.WaitGroup
-	numWorkers := 5 // Default parallel workers
+	numWorkers := DefaultWorkerCount
 	if options.MaxProjects > 0 && options.MaxProjects < numWorkers {
 		numWorkers = options.MaxProjects
 	}
@@ -152,7 +162,7 @@ func (s *Scanner) getProjects(ctx context.Context, options *models.ScanOptions) 
 	trueVal := true
 	listOptions := &api.ListProjectsOptions{
 		Page:       1,
-		PerPage:    100,
+		PerPage:    ProjectsPerPage,
 		Statistics: &trueVal,
 		Archived:   nil, // Get ALL projects (both archived and non-archived)
 	}
@@ -292,7 +302,7 @@ func extractNamespace(pathWithNamespace string) string {
 }
 
 // countProtectedBranches estimates protected branches (GitLab doesn't provide this directly)
-// Assumes main/master branch is protected + ~10% of other branches
+// Assumes main/master branch is protected + ProtectedBranchRatio% of other branches
 func countProtectedBranches(totalBranches int) int {
 	if totalBranches == 0 {
 		return 0
@@ -300,7 +310,7 @@ func countProtectedBranches(totalBranches int) int {
 	if totalBranches == 1 {
 		return 1
 	}
-	protected := 1 + (totalBranches-1)/10
+	protected := 1 + (totalBranches-1)/ProtectedBranchRatio
 	if protected > totalBranches {
 		return totalBranches
 	}
@@ -315,19 +325,8 @@ func logProgress(verbose bool, current, total int, stat *models.RepositoryStats)
 			stat.RepoSizeMB, stat.LFSSizeMB, stat.CommitCount, stat.IssueCount, stat.MRCount, stat.BranchCount, stat.TagCount)
 	} else {
 		fmt.Printf("\r[%d/%d] Scanning projects... Current: %s/%s",
-			current, total, truncate(stat.Namespace, 20), truncate(stat.RepoName, 30))
+			current, total, utils.Truncate(stat.Namespace, 20), utils.Truncate(stat.RepoName, 30))
 	}
-}
-
-// truncate truncates a string to a maximum length
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
 }
 
 // printScanSummary prints the final scan summary

@@ -12,12 +12,8 @@ import (
 	"github.com/mona-actions/gh-gitlab-stats/internal/models"
 	"github.com/mona-actions/gh-gitlab-stats/internal/services"
 	"github.com/mona-actions/gh-gitlab-stats/internal/ui"
+	"github.com/mona-actions/gh-gitlab-stats/internal/utils"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-)
-
-var (
-	cfgFile string
 )
 
 var (
@@ -58,8 +54,6 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
-
 	// Command flags matching the specification
 	rootCmd.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug logging with detailed progress output")
 	rootCmd.Flags().StringVarP(&hostname, "hostname", "H", "gitlab.com", "GitLab hostname (without https:// prefix)")
@@ -68,54 +62,13 @@ func init() {
 	rootCmd.Flags().StringVarP(&output, "output", "O", "csv", "Output format: \"csv\" (timestamped file) or \"table\" (console)")
 	rootCmd.Flags().StringVarP(&repoList, "repo-list", "r", "", "Path to file with list of repositories in \"namespace/project\" format (one per line)")
 	rootCmd.Flags().StringVarP(&token, "token", "t", "", "GitLab Personal Access Token (required, or set GITLAB_TOKEN env var)")
-
-	// Bind flags to viper
-	viper.BindPFlag("debug", rootCmd.Flags().Lookup("debug"))
-	viper.BindPFlag("hostname", rootCmd.Flags().Lookup("hostname"))
-	viper.BindPFlag("token", rootCmd.Flags().Lookup("token"))
-	viper.BindPFlag("namespace", rootCmd.Flags().Lookup("namespace"))
-	viper.BindPFlag("output", rootCmd.Flags().Lookup("output"))
-
-	// Set environment variable prefix and bindings
-	viper.SetEnvPrefix("GITLAB")
-	viper.BindEnv("token") // Binds to GITLAB_TOKEN
-} // initConfig reads in config file and ENV variables if set.
-func initConfig() {
-	if cfgFile != "" {
-		// Use config file from the flag.
-		viper.SetConfigFile(cfgFile)
-	} else {
-		// Find home directory.
-		home, err := os.UserHomeDir()
-		cobra.CheckErr(err)
-
-		// Search config in home directory with name ".gh-gitlab-stats" (without extension).
-		viper.AddConfigPath(home + "/.gh-gitlab-stats")
-		viper.AddConfigPath(".")
-		viper.SetConfigType("yaml")
-		viper.SetConfigName("config")
-	}
-
-	viper.AutomaticEnv() // read in environment variables that match
-
-	// If a config file is found, read it in.
-	if err := viper.ReadInConfig(); err == nil && debug {
-		fmt.Fprintln(os.Stderr, "Using config file:", viper.ConfigFileUsed())
-	}
 }
 
 // runGLRepoStats is the main function that executes the GitLab repository statistics collection
 func runGLRepoStats(cmd *cobra.Command, args []string) error {
-	// Get token from viper (supports flag, env var, or config file)
+	// Get token from environment variable if not provided via flag
 	if token == "" {
-		token = viper.GetString("token")
-	}
-
-	// Get other values from viper if not set via flags
-	if hostname == "" || hostname == "gitlab.com" {
-		if viperHostname := viper.GetString("hostname"); viperHostname != "" {
-			hostname = viperHostname
-		}
+		token = os.Getenv("GITLAB_TOKEN")
 	}
 
 	// Normalize output format to lowercase for consistent internal use
@@ -226,9 +179,7 @@ func executeScan(ctx context.Context, client *api.RestClient, scanner *services.
 
 // createProgressReporter creates the appropriate progress reporter
 func createProgressReporter() ui.ProgressReporter {
-	if output == "table" || debug {
-		return ui.NewConsoleProgress()
-	}
+	// For now, always use quiet progress since logProgress in scanner handles the output
 	return ui.NewQuietProgress()
 }
 
@@ -366,8 +317,8 @@ func outputTable(stats []*models.RepositoryStats) error {
 	// Table rows
 	for _, stat := range stats {
 		fmt.Printf("%-30s %-30s %-10v %-15.2f %-15.2f %-10d %-10d %-15d %-10d %-10d\n",
-			truncate(stat.Namespace, 30),
-			truncate(stat.RepoName, 30),
+			utils.Truncate(stat.Namespace, 30),
+			utils.Truncate(stat.RepoName, 30),
 			stat.IsEmpty,
 			stat.RepoSizeMB,
 			stat.LFSSizeMB,
@@ -380,15 +331,4 @@ func outputTable(stats []*models.RepositoryStats) error {
 
 	fmt.Printf("\nTotal repositories: %d\n", len(stats))
 	return nil
-}
-
-// truncate truncates a string to a maximum length
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	if maxLen <= 3 {
-		return s[:maxLen]
-	}
-	return s[:maxLen-3] + "..."
 }
