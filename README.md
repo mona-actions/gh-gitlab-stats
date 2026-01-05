@@ -19,7 +19,7 @@ A GitHub CLI extension for scanning GitLab instances and generating comprehensiv
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.25 or later
 - GitLab personal access token with appropriate permissions
 
 ### Install from Source
@@ -185,10 +185,12 @@ mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8
 ### Progress Monitoring
 
 **Normal Mode (Compact Progress)**
+
 ```bash
 ./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN
 ```
-```
+
+```txt
 🔍 Discovering projects...
 ✓ Found 25 projects to scan
 
@@ -206,10 +208,12 @@ mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8
 ```
 
 **Debug Mode (Detailed Progress)**
+
 ```bash
 ./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
 ```
-```
+
+```txt
 🔍 Discovering projects...
 ✓ Found 25 projects to scan
   Using 5 parallel workers for scanning
@@ -227,6 +231,7 @@ mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8
 ### API Efficiency
 
 The tool makes efficient API calls to minimize rate limiting:
+
 - **Pagination**: Fetches data in pages of 100 items
 - **Header Counts**: Uses `X-Total` headers when available
 - **Parallel Processing**: Scans up to 5 projects simultaneously
@@ -237,16 +242,20 @@ The tool makes efficient API calls to minimize rate limiting:
 ### Common Issues
 
 **Authentication Error**
-```
+
+```txt
 Error: GitLab token is required
 ```
+
 - Ensure you provide a valid GitLab personal access token
 - Check token has required scopes: `read_api`, `read_repository`
 
 **Connection Issues**
-```
+
+```txt
 Error: failed to connect to GitLab
 ```
+
 - Verify the hostname is correct (without `https://` prefix)
 - Check network connectivity to the GitLab instance
 - Ensure the GitLab instance is accessible
@@ -262,7 +271,7 @@ Error: failed to connect to GitLab
 
 The tool follows clean architecture principles with direct REST API integration:
 
-```
+```bash
 ├── cmd/                    # CLI commands (Cobra)
 │   └── root.go            # Root command with scan logic
 ├── internal/
