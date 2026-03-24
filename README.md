@@ -20,7 +20,7 @@ A GitHub CLI extension for scanning GitLab instances and generating comprehensiv
 ### Prerequisites
 
 - [GitHub CLI](https://cli.github.com/) (`gh`) v2.0 or later (recommended install method)
-- Go 1.25 or later (only needed if building from source)
+- Go 1.21 or later (only needed if building from source)
 - GitLab personal access token with appropriate permissions
 
 ### GitHub CLI Extension (Recommended)
@@ -111,14 +111,15 @@ gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output CSV
 
 ### Scan Modes
 
-The tool supports four scan modes, determined by which flags are provided:
+The tool supports four scan modes, determined by which **filter flags** are provided. When multiple filter flags are used at the same time, the following precedence applies:
+`--repo-list` ➝ `--input` ➝ `--namespace` ➝ *(no filter flags)*.
 
 | Mode | Flag(s) | Description |
 |------|---------|-------------|
-| **All projects** | *(no filter flags)* | Scans all projects accessible to your token |
-| **Single namespace** | `--namespace` | Scans all projects within a specific GitLab group/subgroup |
-| **Multiple namespaces** | `--input` | Scans projects across multiple namespaces listed in a file |
-| **Specific projects** | `--repo-list` | Scans only the exact projects listed in a file |
+| **All projects** | *(no filter flags)* | Scans all projects accessible to your token (used only if no filter flags are provided) |
+| **Single namespace** | `--namespace` | Scans all projects within a specific GitLab group/subgroup (ignored if `--input` or `--repo-list` are also provided) |
+| **Multiple namespaces** | `--input` | Scans projects across multiple namespaces listed in a file (ignored if `--repo-list` is also provided) |
+| **Specific projects** | `--repo-list` | Scans only the exact projects listed in a file (highest-precedence filter; overrides other filter flags) |
 
 ### Input File Formats
 
