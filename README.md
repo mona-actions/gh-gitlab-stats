@@ -19,8 +19,27 @@ A GitHub CLI extension for scanning GitLab instances and generating comprehensiv
 
 ### Prerequisites
 
-- Go 1.25 or later
+- [GitHub CLI](https://cli.github.com/) (`gh`) v2.0 or later (recommended install method)
+- Go 1.25 or later (only needed if building from source)
 - GitLab personal access token with appropriate permissions
+
+### GitHub CLI Extension (Recommended)
+
+```bash
+# Install as a GitHub CLI extension
+gh extension install mona-actions/gh-gitlab-stats
+
+# Verify installation
+gh extension list
+
+# Run via gh CLI
+gh gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN
+
+# Uninstall
+gh extension remove mona-actions/gh-gitlab-stats
+```
+
+> **Note:** When installed as a `gh` extension, use `gh gitlab-stats` (with a space) instead of `./gh-gitlab-stats`.
 
 ### Install from Source
 
@@ -28,15 +47,9 @@ A GitHub CLI extension for scanning GitLab instances and generating comprehensiv
 git clone https://github.com/mona-actions/gh-gitlab-stats.git
 cd gh-gitlab-stats
 go build -o gh-gitlab-stats .
-```
 
-### GitHub CLI Extension
-
-If you're using this as a GitHub CLI extension:
-
-```bash
-# Install as a GitHub CLI extension (if publishing to GitHub)
-gh extension install mona-actions/gh-gitlab-stats
+# Run the local binary directly
+./gh-gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN
 ```
 
 ## Quick Start
@@ -51,15 +64,20 @@ gh extension install mona-actions/gh-gitlab-stats
 ### 2. Run Your First Scan
 
 ```bash
-# Scan GitLab.com (all accessible projects) - saves CSV to timestamped file
+# Using gh CLI extension:
+gh gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN
+
+# Or using the local binary:
 ./gh-gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN
 
 # Scan self-hosted GitLab
-./gh-gitlab-stats --hostname gitlab.company.com --token YOUR_GITLAB_TOKEN
+gh gitlab-stats --hostname gitlab.company.com --token YOUR_GITLAB_TOKEN
 
 # Display results as table in console
-./gh-gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN --output Table
+gh gitlab-stats --hostname gitlab.com --token YOUR_GITLAB_TOKEN --output Table
 ```
+
+> **Tip:** All examples below use `gh gitlab-stats`. If running the local binary, replace with `./gh-gitlab-stats`.
 
 ## Usage
 
@@ -67,16 +85,16 @@ gh extension install mona-actions/gh-gitlab-stats
 
 ```bash
 # Show help
-./gh-gitlab-stats --help
+gh gitlab-stats --help
 
 # Scan with debug output (detailed logging)
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
 
 # Use table output format (display in console)
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output Table
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output Table
 
 # Use CSV output format (default - saves to timestamped file)
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output CSV
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output CSV
 ```
 
 ### Command-Line Options
@@ -89,17 +107,56 @@ gh extension install mona-actions/gh-gitlab-stats
 | `--debug, -d`     | Enable debug logging with detailed progress                  | `false`      |
 | `--namespace, -n` | GitLab namespace/group to analyze (e.g., "mygroup/subgroup") |              |
 | `--input, -i`     | File with list of namespaces (one per line)                  |              |
-| `--repo-list`     | File with list of repositories in "namespace/project" format |              |
+| `--repo-list, -r` | File with list of repositories in `namespace/project` format |              |
+
+### Scan Modes
+
+The tool supports four scan modes, determined by which flags are provided:
+
+| Mode | Flag(s) | Description |
+|------|---------|-------------|
+| **All projects** | *(no filter flags)* | Scans all projects accessible to your token |
+| **Single namespace** | `--namespace` | Scans all projects within a specific GitLab group/subgroup |
+| **Multiple namespaces** | `--input` | Scans projects across multiple namespaces listed in a file |
+| **Specific projects** | `--repo-list` | Scans only the exact projects listed in a file |
+
+### Input File Formats
+
+**Namespace file** (`--input`):
+
+```text
+# Lines starting with # are comments and ignored
+# Blank lines are also ignored
+mygroup
+mygroup/subgroup
+anothergroup
+```
+
+**Repository list file** (`--repo-list`):
+
+```text
+# Use namespace/project format — NOT full URLs
+# ✅ Correct:
+mygroup/my-project
+mygroup/subgroup/another-project
+
+# ❌ Wrong (will result in 404 errors):
+# https://gitlab.com/mygroup/my-project
+```
+
+> **Important:** Entries in `--repo-list` must be `namespace/project` paths, not full URLs.
 
 ## Configuration
 
 ### Environment Variables
 
-You can set the GitLab token via environment variable:
+You can set the GitLab token via environment variable instead of using the `--token` flag:
 
 ```bash
 export GITLAB_TOKEN="your-token-here"
-./gh-gitlab-stats --hostname gitlab.com
+
+# --token can now be omitted
+gh gitlab-stats --hostname gitlab.com
 ```
 
 ## Output Format
@@ -155,31 +212,43 @@ mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8
 
 ```bash
 # Scan all accessible projects on GitLab.com
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN
 
 # Scan with detailed debug logging
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
 
 # Scan self-hosted GitLab instance
-./gh-gitlab-stats \
+gh gitlab-stats \
   --hostname gitlab.company.com \
   --token $GITLAB_TOKEN
 
 # Scan specific namespace/group
-./gh-gitlab-stats \
+gh gitlab-stats \
   --hostname gitlab.com \
   --token $GITLAB_TOKEN \
   --namespace mygroup/subgroup
+
+# Scan multiple namespaces from a file
+gh gitlab-stats \
+  --hostname gitlab.com \
+  --token $GITLAB_TOKEN \
+  --input namespaces.txt
+
+# Scan specific projects from a file
+gh gitlab-stats \
+  --hostname gitlab.company.com \
+  --token $GITLAB_TOKEN \
+  --repo-list repos.txt
 ```
 
 ### Output Formats
 
 ```bash
 # CSV output (default) - saved to timestamped file like gitlab-stats-2025-10-10-14-24-27.csv
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output CSV
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output CSV
 
 # Table output (console display) - prints formatted table to stdout
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output Table
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --output Table
 ```
 
 ### Progress Monitoring
@@ -187,7 +256,7 @@ mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8
 **Normal Mode (Compact Progress)**
 
 ```bash
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN
 ```
 
 ```txt
@@ -210,7 +279,7 @@ mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8
 **Debug Mode (Detailed Progress)**
 
 ```bash
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
 ```
 
 ```txt
@@ -264,7 +333,7 @@ Error: failed to connect to GitLab
 
 ```bash
 # Enable debug output to see detailed progress
-./gh-gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
+gh gitlab-stats --hostname gitlab.com --token $GITLAB_TOKEN --debug
 ```
 
 ## Architecture
