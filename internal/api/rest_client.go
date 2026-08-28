@@ -6,10 +6,15 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
+
+	"golang.org/x/time/rate"
 )
 
 const (
@@ -20,6 +25,19 @@ const (
 	MaxPagesPerQuery = 10
 	// DefaultHTTPTimeout is the default timeout for HTTP requests
 	DefaultHTTPTimeout = 120 * time.Second
+
+	// DefaultRateLimit is the steady-state request rate (requests/second) shared
+	// across all scanner workers. Tune here to respect GitLab's rate limits.
+	DefaultRateLimit = 10
+	// DefaultRateBurst is the shared token-bucket burst size (matches the worker count).
+	DefaultRateBurst = 5
+	// DefaultMaxRetries bounds the number of retries for transient failures.
+	DefaultMaxRetries = 5
+	// DefaultBaseBackoff is the base delay used for exponential backoff.
+	DefaultBaseBackoff = 500 * time.Millisecond
+	// DefaultMaxBackoff caps any single retry/pacing sleep so a bogus server hint
+	// (or clock skew) cannot stall a worker indefinitely.
+	DefaultMaxBackoff = 30 * time.Second
 )
 
 // GitLabClient interface defines the contract for GitLab API interactions
@@ -53,6 +71,15 @@ type RestClient struct {
 	baseURL    string
 	token      string
 	httpClient *http.Client
+	// limiter is shared by all workers so they collectively respect the rate limit.
+	limiter *rate.Limiter
+
+	// Retry/backoff configuration. Defaulted in NewRestClient and overridable in tests
+	// so the suite can use tiny, deterministic durations.
+	maxRetries  int
+	baseBackoff time.Duration
+	maxBackoff  time.Duration
+	randFloat   func() float64
 }
 
 // NewRestClient creates a new REST API based GitLab client
@@ -67,6 +94,11 @@ func NewRestClient(baseURL, token string) (*RestClient, error) {
 		httpClient: &http.Client{
 			Timeout: DefaultHTTPTimeout,
 		},
+		limiter:     rate.NewLimiter(rate.Limit(DefaultRateLimit), DefaultRateBurst),
+		maxRetries:  DefaultMaxRetries,
+		baseBackoff: DefaultBaseBackoff,
+		maxBackoff:  DefaultMaxBackoff,
+		randFloat:   rand.Float64,
 	}, nil
 }
 
@@ -78,7 +110,10 @@ func (c *RestClient) encodeProjectID(projectID interface{}) string {
 	return fmt.Sprintf("%v", projectID)
 }
 
-// doRequest performs an HTTP request with authentication
+// doRequest performs an authenticated HTTP request with rate limiting, retries,
+// and backoff. It retries on 429 and transient 5xx responses (and transport
+// errors), honoring Retry-After / RateLimit-Reset hints, and aborts promptly
+// when the context is cancelled.
 func (c *RestClient) doRequest(ctx context.Context, method, path string, params url.Values) ([]byte, *http.Response, error) {
 	// Build full URL
 	apiURL := fmt.Sprintf("%s/api/v4%s", c.baseURL, path)
@@ -86,35 +121,179 @@ func (c *RestClient) doRequest(ctx context.Context, method, path string, params 
 		apiURL = fmt.Sprintf("%s?%s", apiURL, params.Encode())
 	}
 
-	// Create request
-	req, err := http.NewRequestWithContext(ctx, method, apiURL, nil)
+	var lastErr error
+	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+		// Respect the shared rate limit; Wait is context-aware and goroutine-safe.
+		if err := c.limiter.Wait(ctx); err != nil {
+			return nil, nil, err
+		}
+
+		req, err := http.NewRequestWithContext(ctx, method, apiURL, nil)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		req.Header.Set("PRIVATE-TOKEN", c.token)
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			// Do not retry if the context was cancelled or timed out.
+			if ctx.Err() != nil {
+				return nil, nil, ctx.Err()
+			}
+			lastErr = fmt.Errorf("request failed: %w", err)
+			if attempt == c.maxRetries {
+				break
+			}
+			if sleepErr := c.sleepWithContext(ctx, c.backoffDuration(attempt)); sleepErr != nil {
+				return nil, nil, sleepErr
+			}
+			continue
+		}
+
+		// Retryable HTTP status: drain and close this body (so the connection can be
+		// reused), record the error, then wait and retry.
+		if isRetryableStatus(resp.StatusCode) {
+			body, _ := io.ReadAll(resp.Body)
+			resp.Body.Close()
+			lastErr = fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+			if attempt == c.maxRetries {
+				return body, resp, lastErr
+			}
+			if sleepErr := c.sleepWithContext(ctx, c.waitForRetry(resp, attempt)); sleepErr != nil {
+				return nil, nil, sleepErr
+			}
+			continue
+		}
+
+		// Non-retryable response: read the body and return (success or hard error).
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return nil, resp, fmt.Errorf("failed to read response body: %w", err)
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return body, resp, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
+		}
+		return body, resp, nil
+	}
+
+	if lastErr == nil {
+		lastErr = fmt.Errorf("request failed after %d attempts", c.maxRetries+1)
+	}
+	return nil, nil, lastErr
+}
+
+// isRetryableStatus reports whether an HTTP status warrants a retry. 501 and other
+// 4xx (besides 429) are treated as permanent.
+func isRetryableStatus(code int) bool {
+	switch code {
+	case http.StatusTooManyRequests, // 429
+		http.StatusInternalServerError, // 500
+		http.StatusBadGateway,          // 502
+		http.StatusServiceUnavailable,  // 503
+		http.StatusGatewayTimeout:      // 504
+		return true
+	}
+	return false
+}
+
+// sleepWithContext sleeps for d unless the context is cancelled first, in which
+// case it returns the context error promptly.
+func (c *RestClient) sleepWithContext(ctx context.Context, d time.Duration) error {
+	if d <= 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			return nil
+		}
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
+	}
+}
+
+// waitForRetry determines how long to wait before the next attempt, honoring
+// Retry-After first, then RateLimit-Reset, then computed exponential backoff.
+func (c *RestClient) waitForRetry(resp *http.Response, attempt int) time.Duration {
+	if d, ok := parseRetryAfter(resp.Header.Get("Retry-After")); ok {
+		return c.clampDuration(d)
+	}
+	// RateLimit-Reset (epoch seconds) also covers the RateLimit-Remaining: 0 case,
+	// where the reset time tells us when the budget refills.
+	if d, ok := untilRateLimitReset(resp.Header.Get("RateLimit-Reset")); ok {
+		return c.clampDuration(d)
+	}
+	return c.backoffDuration(attempt)
+}
+
+// backoffDuration computes an exponential backoff with full jitter, capped at maxBackoff.
+func (c *RestClient) backoffDuration(attempt int) time.Duration {
+	backoff := float64(c.baseBackoff) * math.Pow(2, float64(attempt))
+	if backoff > float64(c.maxBackoff) {
+		backoff = float64(c.maxBackoff)
+	}
+	jittered := backoff * c.randFloat() // full jitter in [0, backoff)
+	return c.clampDuration(time.Duration(jittered))
+}
+
+// clampDuration floors a duration at 0 and caps it at maxBackoff.
+func (c *RestClient) clampDuration(d time.Duration) time.Duration {
+	if d < 0 {
+		return 0
+	}
+	if d > c.maxBackoff {
+		return c.maxBackoff
+	}
+	return d
+}
+
+// parseRetryAfter parses a Retry-After header value, supporting both the
+// delta-seconds form and the HTTP-date form. Past dates / negative deltas
+// collapse to 0.
+func parseRetryAfter(v string) (time.Duration, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(v); err == nil {
+		if secs < 0 {
+			secs = 0
+		}
+		return time.Duration(secs) * time.Second, true
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		d := time.Until(t)
+		if d < 0 {
+			d = 0
+		}
+		return d, true
+	}
+	return 0, false
+}
+
+// untilRateLimitReset interprets a RateLimit-Reset header (epoch seconds) as a
+// wait duration from now. Past resets collapse to 0.
+func untilRateLimitReset(v string) (time.Duration, bool) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return 0, false
+	}
+	epoch, err := strconv.ParseInt(v, 10, 64)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create request: %w", err)
+		return 0, false
 	}
-
-	// Add authentication header
-	req.Header.Set("PRIVATE-TOKEN", c.token)
-	req.Header.Set("Accept", "application/json")
-
-	// Execute request
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, nil, fmt.Errorf("request failed: %w", err)
+	d := time.Until(time.Unix(epoch, 0))
+	if d < 0 {
+		d = 0
 	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, resp, fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	// Check for HTTP errors
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return body, resp, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body))
-	}
-
-	return body, resp, nil
+	return d, true
 }
 
 // ListProjects implements the GET /projects endpoint or GET /groups/:id/projects for group filtering
@@ -407,8 +586,14 @@ func (c *RestClient) GetProjectStatistics(ctx context.Context, projectID interfa
 	return project.Statistics, nil
 }
 
-// getCountFromHeader makes a minimal API request and returns the count from X-Total header
-func (c *RestClient) getCountFromHeader(ctx context.Context, endpoint string, extraParams url.Values) int {
+// getCountFromHeader makes a minimal API request and reads the count from the
+// X-Total header. It returns a tri-state:
+//   - hadHeader=true, err=nil: X-Total was present and numeric -> count is authoritative.
+//   - hadHeader=false, err=nil: X-Total was absent or non-numeric -> caller should
+//     fall back to counting via full pagination. (GitLab omits X-Total on result
+//     sets larger than 10,000 rows, so this is NOT an error and NOT a real 0.)
+//   - err!=nil: a transport/HTTP error occurred after retries.
+func (c *RestClient) getCountFromHeader(ctx context.Context, endpoint string, extraParams url.Values) (count int, hadHeader bool, err error) {
 	params := url.Values{}
 	params.Set("per_page", "1")
 	params.Set("page", "1")
@@ -420,15 +605,66 @@ func (c *RestClient) getCountFromHeader(ctx context.Context, endpoint string, ex
 
 	_, resp, err := c.doRequest(ctx, "GET", endpoint, params)
 	if err != nil {
-		return 0
+		return 0, false, err
 	}
 
-	if totalHeader := resp.Header.Get("X-Total"); totalHeader != "" {
-		if total, err := strconv.Atoi(totalHeader); err == nil {
-			return total
+	totalHeader := strings.TrimSpace(resp.Header.Get("X-Total"))
+	if totalHeader == "" {
+		return 0, false, nil
+	}
+	total, convErr := strconv.Atoi(totalHeader)
+	if convErr != nil {
+		// Non-numeric header: treat as absent and fall back to pagination.
+		return 0, false, nil
+	}
+	return total, true, nil
+}
+
+// countByPagination counts items in a collection by paging through it with
+// per_page=100 until a short or empty page is returned. It is intentionally
+// unbounded, since the X-Total header is omitted exactly on the largest result
+// sets; the shared rate limiter and context keep it safe.
+func (c *RestClient) countByPagination(ctx context.Context, endpoint string, extraParams url.Values) (int, error) {
+	total := 0
+	for page := 1; ; page++ {
+		params := url.Values{}
+		params.Set("per_page", strconv.Itoa(DefaultPageSize))
+		params.Set("page", strconv.Itoa(page))
+		for key, values := range extraParams {
+			for _, value := range values {
+				params.Add(key, value)
+			}
+		}
+
+		body, _, err := c.doRequest(ctx, "GET", endpoint, params)
+		if err != nil {
+			return 0, err
+		}
+
+		var items []json.RawMessage
+		if err := json.Unmarshal(body, &items); err != nil {
+			return 0, fmt.Errorf("failed to parse pagination response: %w", err)
+		}
+
+		total += len(items)
+		if len(items) < DefaultPageSize {
+			break
 		}
 	}
-	return 0
+	return total, nil
+}
+
+// countCollection returns the size of a collection, preferring the X-Total header
+// and falling back to full pagination when the header is absent.
+func (c *RestClient) countCollection(ctx context.Context, endpoint string, extraParams url.Values) (int, error) {
+	count, hadHeader, err := c.getCountFromHeader(ctx, endpoint, extraParams)
+	if err != nil {
+		return 0, err
+	}
+	if hadHeader {
+		return count, nil
+	}
+	return c.countByPagination(ctx, endpoint, extraParams)
 }
 
 // getMergeRequestCount gets the total count of merge requests for a project
@@ -438,42 +674,42 @@ func (c *RestClient) getMergeRequestCount(ctx context.Context, projectID interfa
 
 	encodedProjectID := c.encodeProjectID(projectID)
 	endpoint := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
-	return c.getCountFromHeader(ctx, endpoint, params), nil
+	return c.countCollection(ctx, endpoint, params)
 }
 
 // getBranchCount gets the total count of branches for a project
 func (c *RestClient) getBranchCount(ctx context.Context, projectID interface{}) (int, error) {
 	encodedProjectID := c.encodeProjectID(projectID)
 	endpoint := fmt.Sprintf("/projects/%s/repository/branches", encodedProjectID)
-	return c.getCountFromHeader(ctx, endpoint, nil), nil
+	return c.countCollection(ctx, endpoint, nil)
 }
 
 // getTagCount gets the total count of tags for a project
 func (c *RestClient) getTagCount(ctx context.Context, projectID interface{}) (int, error) {
 	encodedProjectID := c.encodeProjectID(projectID)
 	endpoint := fmt.Sprintf("/projects/%s/repository/tags", encodedProjectID)
-	return c.getCountFromHeader(ctx, endpoint, nil), nil
+	return c.countCollection(ctx, endpoint, nil)
 }
 
 // getMemberCount gets the total count of members for a project
 func (c *RestClient) getMemberCount(ctx context.Context, projectID interface{}) (int, error) {
 	encodedProjectID := c.encodeProjectID(projectID)
 	endpoint := fmt.Sprintf("/projects/%s/members/all", encodedProjectID)
-	return c.getCountFromHeader(ctx, endpoint, nil), nil
+	return c.countCollection(ctx, endpoint, nil)
 }
 
 // getMilestoneCount gets the total count of milestones for a project
 func (c *RestClient) getMilestoneCount(ctx context.Context, projectID interface{}) (int, error) {
 	encodedProjectID := c.encodeProjectID(projectID)
 	endpoint := fmt.Sprintf("/projects/%s/milestones", encodedProjectID)
-	return c.getCountFromHeader(ctx, endpoint, nil), nil
+	return c.countCollection(ctx, endpoint, nil)
 }
 
 // getReleaseCount gets the total count of releases for a project
 func (c *RestClient) getReleaseCount(ctx context.Context, projectID interface{}) (int, error) {
 	encodedProjectID := c.encodeProjectID(projectID)
 	endpoint := fmt.Sprintf("/projects/%s/releases", encodedProjectID)
-	return c.getCountFromHeader(ctx, endpoint, nil), nil
+	return c.countCollection(ctx, endpoint, nil)
 }
 
 // hasWikiPages checks if a project actually has wiki pages
