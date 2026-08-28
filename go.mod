@@ -2,7 +2,10 @@ module github.com/mona-actions/gh-gitlab-stats
 
 go 1.25.1
 
-require github.com/spf13/cobra v1.10.1
+require (
+	github.com/spf13/cobra v1.10.1
+	golang.org/x/time v0.15.0
+)
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
