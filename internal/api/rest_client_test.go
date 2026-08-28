@@ -1,11 +1,14 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -509,5 +512,137 @@ func TestGetProjectStatistics_OverridesIssueCountAndRealProtectedBranches(t *tes
 	// Protected branches come from the real endpoint, not a branch-count heuristic.
 	if stats.ProtectedBranchCount != 2 {
 		t.Fatalf("expected ProtectedBranchCount 2 from /protected_branches, got %d", stats.ProtectedBranchCount)
+	}
+}
+
+// aggHandler serves paginated list pages for the aggregation loops
+// (getMergeRequestReviewCount / getMergeRequestCommentCount / getIssueCommentCount).
+// pageItems maps a 1-based page number to the number of items returned. While the
+// current page is below lastPage, an X-Next-Page header is set to drive the loop the
+// way GitLab does; on/after lastPage the header is absent. Any page in failPages
+// returns HTTP 500 (persistently, to exhaust the retry budget). field selects the
+// summed JSON attribute: "approved_by" emits a single-approver array per item,
+// anything else emits that numeric field set to 1 per item.
+func aggHandler(field string, pageItems map[int]int, lastPage int, failPages map[int]bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+		if failPages[page] {
+			writeJSON(w, http.StatusInternalServerError, `{"error":"boom"}`)
+			return
+		}
+		if page < lastPage {
+			w.Header().Set("X-Next-Page", strconv.Itoa(page+1))
+		}
+		n := pageItems[page]
+		items := make([]string, n)
+		for i := range items {
+			if field == "approved_by" {
+				items[i] = `{"approved_by":[{"id":1}]}`
+			} else {
+				items[i] = `{"` + field + `":1}`
+			}
+		}
+		writeJSON(w, http.StatusOK, "["+join(items, ",")+"]")
+	}
+}
+
+// TestGetMergeRequestReviewCount_ExhaustsBeyond1000 proves the old 1,000-item cap is
+// gone: 12 full pages (100 each) plus a 13th short page must all be summed.
+func TestGetMergeRequestReviewCount_ExhaustsBeyond1000(t *testing.T) {
+	pages := map[int]int{13: 50}
+	for p := 1; p <= 12; p++ {
+		pages[p] = 100
+	}
+	srv := httptest.NewServer(aggHandler("approved_by", pages, 13, nil))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	got, err := c.getMergeRequestReviewCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 1250 {
+		t.Fatalf("expected 1250 approver entries across 13 pages, got %d", got)
+	}
+}
+
+// TestGetIssueCommentCount_ExactMultipleBoundary proves no off-by-one / no premature
+// stop when the total is an exact multiple of the page size: two full pages, then an
+// absent X-Next-Page on the last full page ends pagination.
+func TestGetIssueCommentCount_ExactMultipleBoundary(t *testing.T) {
+	srv := httptest.NewServer(aggHandler("user_notes_count", map[int]int{1: 100, 2: 100}, 2, nil))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	got, err := c.getIssueCommentCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 200 {
+		t.Fatalf("expected 200 notes across 2 full pages, got %d", got)
+	}
+}
+
+// TestGetMergeRequestCommentCount_PartialOnFailureReturnsNilErr verifies the
+// partial-safety contract: a mid-pagination request failure (retries exhausted) stops
+// the loop and returns the sum accumulated so far with a nil error.
+func TestGetMergeRequestCommentCount_PartialOnFailureReturnsNilErr(t *testing.T) {
+	srv := httptest.NewServer(aggHandler("user_notes_count", map[int]int{1: 100, 2: 100}, 5, map[int]bool{3: true}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	got, err := c.getMergeRequestCommentCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("expected nil error on partial count, got %v", err)
+	}
+	if got != 200 {
+		t.Fatalf("expected partial sum 200 from first two pages, got %d", got)
+	}
+}
+
+// TestGetIssueCommentCount_ZeroItemsNoWarning confirms an empty first page returns 0
+// with a nil error and emits no PARTIAL warning.
+func TestGetIssueCommentCount_ZeroItemsNoWarning(t *testing.T) {
+	srv := httptest.NewServer(aggHandler("user_notes_count", map[int]int{1: 0}, 1, nil))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	c := newTestClient(t, srv.URL)
+	got, err := c.getIssueCommentCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != 0 {
+		t.Fatalf("expected 0 for empty project, got %d", got)
+	}
+	if strings.Contains(buf.String(), "PARTIAL") {
+		t.Fatalf("did not expect a PARTIAL warning, got: %q", buf.String())
+	}
+}
+
+// TestGetIssueCommentCount_PartialEmitsWarning asserts that a mid-pagination failure
+// surfaces the durable PARTIAL warning naming the project and field. This test mutates
+// the global logger, so it must not run in parallel.
+func TestGetIssueCommentCount_PartialEmitsWarning(t *testing.T) {
+	srv := httptest.NewServer(aggHandler("user_notes_count", map[int]int{1: 100}, 5, map[int]bool{2: true}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	defer log.SetOutput(os.Stderr)
+
+	c := newTestClient(t, srv.URL)
+	got, err := c.getIssueCommentCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("expected nil error on partial count, got %v", err)
+	}
+	if got != 100 {
+		t.Fatalf("expected partial sum 100, got %d", got)
+	}
+	if !strings.Contains(buf.String(), "issue_comment_count") || !strings.Contains(buf.String(), "PARTIAL") {
+		t.Fatalf("expected PARTIAL warning for issue_comment_count, got: %q", buf.String())
 	}
 }
