@@ -174,10 +174,10 @@ The tool generates CSV output with comprehensive GitLab project statistics:
 | `Project_Size(mb)`        | Number    | Repository size in megabytes                 | API: `statistics.repository_size`    |
 | `LFS_Size(mb)`            | Number    | Git LFS storage size in megabytes            | API: `statistics.lfs_objects_size`   |
 | `Collaborator_Count`      | Integer   | Number of project members                    | API: `/members/all` endpoint         |
-| `Protected_Branch_Count`  | Integer   | Number of protected branches (estimated)     | Computed from branch count           |
+| `Protected_Branch_Count`  | Integer   | Number of protected branches (branch-protection rules) | API: `/protected_branches` endpoint  |
 | `MR_Review_Count`         | Integer   | Number of merge request reviews/approvals    | API: MR `upvotes` + `approved_by`    |
 | `Milestone_Count`         | Integer   | Number of milestones                         | API: `/milestones` endpoint          |
-| `Issue_Count`             | Integer   | Number of issues (open)                      | API: `open_issues_count`             |
+| `Issue_Count`             | Integer   | Number of issues (all states)                | API: `/issues` endpoint (all states) |
 | `MR_Count`                | Integer   | Number of merge requests (all states)        | API: `/merge_requests` endpoint      |
 | `MR_Review_Comment_Count` | Integer   | Total comments on all merge requests         | API: MR `user_notes_count` sum       |
 | `Commit_Count`            | Integer   | Total number of commits                      | API: `statistics.commit_count`       |

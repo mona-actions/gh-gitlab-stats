@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -376,5 +377,137 @@ func TestSharedLimiter_ConcurrentRetries(t *testing.T) {
 	close(errCh)
 	for err := range errCh {
 		t.Fatalf("concurrent request failed: %v", err)
+	}
+}
+
+func TestGetProtectedBranchCount_FullPagination(t *testing.T) {
+	// countByPagination is used directly: page 1 full (100), page 2 partial (30) => 130.
+	// The per_page=1 probe is never hit, so probeHeader is irrelevant here.
+	srv := httptest.NewServer(paginationHandler("", map[string]int{"1": 100, "2": 30}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	count, err := c.getProtectedBranchCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 130 {
+		t.Fatalf("expected 130 from full pagination, got %d", count)
+	}
+}
+
+func TestGetProtectedBranchCount_EmptyIsRealZero(t *testing.T) {
+	// No protected branches: the first page is empty and short, so the count is a real 0.
+	srv := httptest.NewServer(paginationHandler("", map[string]int{}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	count, err := c.getProtectedBranchCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected 0 for an empty protected-branches list, got %d", count)
+	}
+}
+
+func TestGetIssueCount_PresentXTotalAllStates(t *testing.T) {
+	// GitLab returns all states by default, so getIssueCount must not send a state filter.
+	var sawStateParam bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("state") != "" {
+			sawStateParam = true
+		}
+		// Present, numeric X-Total on the probe -> authoritative all-states count.
+		paginationHandler("42", map[string]int{})(w, r)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	count, err := c.getIssueCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 42 {
+		t.Fatalf("expected 42 from X-Total, got %d", count)
+	}
+	if sawStateParam {
+		t.Fatal("getIssueCount must not send a state filter (should count all states)")
+	}
+}
+
+func TestGetIssueCount_MissingXTotalFallsBackToPagination(t *testing.T) {
+	// GitLab omits X-Total on >10k-row sets: fall back to pagination (100 + 50 = 150).
+	srv := httptest.NewServer(paginationHandler("", map[string]int{"1": 100, "2": 50}))
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	count, err := c.getIssueCount(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if count != 150 {
+		t.Fatalf("expected 150 from pagination fallback, got %d", count)
+	}
+}
+
+// projectStatsHandler routes the many endpoints GetProjectStatistics touches. The
+// project GET returns open_issues_count=3 (open-only), while /issues reports 7 all
+// states and /protected_branches returns 2 entries, so the test can assert the
+// override and the real protected-branch count.
+func projectStatsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path
+		q := r.URL.Query()
+		switch {
+		case strings.HasSuffix(path, "/issues"):
+			// getIssueCount probe (per_page=1) reports 7 via X-Total; the
+			// per_page=100 issue-comment loop just gets an empty page.
+			if q.Get("per_page") == "1" {
+				w.Header().Set("X-Total", "7")
+			}
+			writeJSON(w, http.StatusOK, "[]")
+		case strings.HasSuffix(path, "/protected_branches"):
+			// Full-pagination count: 2 entries on page 1, then a short page ends it.
+			if q.Get("page") == "1" {
+				writeJSON(w, http.StatusOK, "[{},{}]")
+				return
+			}
+			writeJSON(w, http.StatusOK, "[]")
+		case strings.HasSuffix(path, "/merge_requests"):
+			// MR count probe + review/comment loops: no data needed.
+			if q.Get("per_page") == "1" {
+				w.Header().Set("X-Total", "0")
+			}
+			writeJSON(w, http.StatusOK, "[]")
+		case strings.HasSuffix(path, "/projects/1"):
+			// The project GET with statistics=true. Open-only issue count is 3.
+			writeJSON(w, http.StatusOK, `{"id":1,"name":"proj","wiki_enabled":false,"open_issues_count":3,"statistics":{"commit_count":50,"repository_size":1024}}`)
+		default:
+			// Every other counter (branches, tags, members, milestones, releases).
+			if q.Get("per_page") == "1" {
+				w.Header().Set("X-Total", "0")
+			}
+			writeJSON(w, http.StatusOK, "[]")
+		}
+	}
+}
+
+func TestGetProjectStatistics_OverridesIssueCountAndRealProtectedBranches(t *testing.T) {
+	srv := httptest.NewServer(projectStatsHandler())
+	defer srv.Close()
+
+	c := newTestClient(t, srv.URL)
+	stats, err := c.GetProjectStatistics(context.Background(), 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// open_issues_count was 3; the all-states /issues count (7) must override it.
+	if stats.IssueCount != 7 {
+		t.Fatalf("expected IssueCount overridden to 7 (all states), got %d", stats.IssueCount)
+	}
+	// Protected branches come from the real endpoint, not a branch-count heuristic.
+	if stats.ProtectedBranchCount != 2 {
+		t.Fatalf("expected ProtectedBranchCount 2 from /protected_branches, got %d", stats.ProtectedBranchCount)
 	}
 }
