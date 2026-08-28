@@ -20,9 +20,6 @@ import (
 const (
 	// DefaultPageSize is the default number of items per page for API requests
 	DefaultPageSize = 100
-	// MaxPagesPerQuery is the maximum number of pages to fetch for expensive operations
-	// to avoid excessive API calls (e.g., for MR comments, issue comments)
-	MaxPagesPerQuery = 10
 	// DefaultHTTPTimeout is the default timeout for HTTP requests
 	DefaultHTTPTimeout = 120 * time.Second
 
@@ -769,31 +766,30 @@ func (c *RestClient) hasWikiPages(ctx context.Context, projectID interface{}) bo
 	return len(wikis) > 0
 }
 
-// getMergeRequestReviewCount gets the total count of MR approvals/reviews
+// getMergeRequestReviewCount gets the total number of approver entries across all
+// merge requests in a project. It paginates through every MR (scope=all) and sums
+// len(approved_by) for each — i.e., an approval-entry total, not a count of MRs that
+// have at least one approval. Upvotes/reactions are intentionally excluded.
 func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID interface{}) (int, error) {
-	// In GitLab, reviews are tracked as "approvals" on merge requests
-	// We'll count MRs that have at least one approval
 	totalReviews := 0
 	mrParams := url.Values{}
 	mrParams.Set("scope", "all")
 	mrParams.Set("per_page", strconv.Itoa(DefaultPageSize))
 
 	encodedProjectID := c.encodeProjectID(projectID)
-	for page := 1; page <= MaxPagesPerQuery; page++ { // Limit to MaxPagesPerQuery * DefaultPageSize MRs
+	mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
+	for page := 1; ; page++ {
 		mrParams.Set("page", strconv.Itoa(page))
-		mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
-		mrBody, _, err := c.doRequest(ctx, "GET", mrPath, mrParams)
+		mrBody, resp, err := c.doRequest(ctx, "GET", mrPath, mrParams)
 		if err != nil {
-			break
+			log.Printf("Warning: mr_review_count for project %v is PARTIAL: failed on page %d: %v", projectID, page, err)
+			return totalReviews, nil
 		}
 
 		var pageMRs []map[string]interface{}
 		if err := json.Unmarshal(mrBody, &pageMRs); err != nil {
-			break
-		}
-
-		if len(pageMRs) == 0 {
-			break
+			log.Printf("Warning: mr_review_count for project %v is PARTIAL: failed to parse page %d: %v", projectID, page, err)
+			return totalReviews, nil
 		}
 
 		for _, mr := range pageMRs {
@@ -804,7 +800,7 @@ func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID i
 			}
 		}
 
-		if len(pageMRs) < DefaultPageSize {
+		if isLastPage(resp, len(pageMRs)) {
 			break
 		}
 	}
@@ -812,34 +808,42 @@ func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID i
 	return totalReviews, nil
 }
 
+// isLastPage reports whether pagination should stop after the current page.
+// It follows GitLab's documented signal — an empty/absent X-Next-Page header means
+// there is no next page — and additionally stops on a short page (fewer than
+// DefaultPageSize items), which is always the last page. Either signal terminates.
+func isLastPage(resp *http.Response, pageItems int) bool {
+	if resp != nil {
+		if next := strings.TrimSpace(resp.Header.Get("X-Next-Page")); next == "" {
+			return true
+		}
+	}
+	return pageItems < DefaultPageSize
+}
+
 // getMergeRequestCommentCount gets the total count of comments on merge requests
 func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID interface{}) (int, error) {
-	// In GitLab, MR comments are called "notes" and include both regular comments and code review comments
-	// We need to get notes from the merge_requests endpoint
+	// In GitLab, MR comments are called "notes" and include both regular comments and code review comments.
+	// We sum the user_notes_count field across all merge requests (scope=all), paginating to exhaustion.
 	encodedProjectID := c.encodeProjectID(projectID)
 
-	// For now, we'll use the user_notes_count field from MRs
-	// This requires fetching all MRs to sum up the notes
-	// To avoid excessive API calls, we limit to MaxPagesPerQuery pages
 	totalNotes := 0
 	mrParams := url.Values{}
 	mrParams.Set("scope", "all")
 	mrParams.Set("per_page", strconv.Itoa(DefaultPageSize))
-	for page := 1; page <= MaxPagesPerQuery; page++ { // Limit to MaxPagesPerQuery * DefaultPageSize MRs
+	mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
+	for page := 1; ; page++ {
 		mrParams.Set("page", strconv.Itoa(page))
-		mrPath := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
-		mrBody, _, err := c.doRequest(ctx, "GET", mrPath, mrParams)
+		mrBody, resp, err := c.doRequest(ctx, "GET", mrPath, mrParams)
 		if err != nil {
-			break
+			log.Printf("Warning: mr_comment_count for project %v is PARTIAL: failed on page %d: %v", projectID, page, err)
+			return totalNotes, nil
 		}
 
 		var pageMRs []map[string]interface{}
 		if err := json.Unmarshal(mrBody, &pageMRs); err != nil {
-			break
-		}
-
-		if len(pageMRs) == 0 {
-			break
+			log.Printf("Warning: mr_comment_count for project %v is PARTIAL: failed to parse page %d: %v", projectID, page, err)
+			return totalNotes, nil
 		}
 
 		for _, mr := range pageMRs {
@@ -848,7 +852,7 @@ func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID 
 			}
 		}
 
-		if len(pageMRs) < DefaultPageSize {
+		if isLastPage(resp, len(pageMRs)) {
 			break
 		}
 	}
@@ -858,28 +862,27 @@ func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID 
 
 // getIssueCommentCount gets the total count of comments on issues
 func (c *RestClient) getIssueCommentCount(ctx context.Context, projectID interface{}) (int, error) {
-	// Similar to MR comments, we need to fetch issues and sum up their notes
+	// Similar to MR comments, we fetch issues (scope=all) and sum their user_notes_count,
+	// paginating to exhaustion.
 	totalNotes := 0
 	issueParams := url.Values{}
 	issueParams.Set("scope", "all")
 	issueParams.Set("per_page", strconv.Itoa(DefaultPageSize))
 
 	encodedProjectID := c.encodeProjectID(projectID)
-	for page := 1; page <= MaxPagesPerQuery; page++ { // Limit to MaxPagesPerQuery * DefaultPageSize issues
+	issuePath := fmt.Sprintf("/projects/%s/issues", encodedProjectID)
+	for page := 1; ; page++ {
 		issueParams.Set("page", strconv.Itoa(page))
-		issuePath := fmt.Sprintf("/projects/%s/issues", encodedProjectID)
-		issueBody, _, err := c.doRequest(ctx, "GET", issuePath, issueParams)
+		issueBody, resp, err := c.doRequest(ctx, "GET", issuePath, issueParams)
 		if err != nil {
-			break
+			log.Printf("Warning: issue_comment_count for project %v is PARTIAL: failed on page %d: %v", projectID, page, err)
+			return totalNotes, nil
 		}
 
 		var pageIssues []map[string]interface{}
 		if err := json.Unmarshal(issueBody, &pageIssues); err != nil {
-			break
-		}
-
-		if len(pageIssues) == 0 {
-			break
+			log.Printf("Warning: issue_comment_count for project %v is PARTIAL: failed to parse page %d: %v", projectID, page, err)
+			return totalNotes, nil
 		}
 
 		for _, issue := range pageIssues {
@@ -888,7 +891,7 @@ func (c *RestClient) getIssueCommentCount(ctx context.Context, projectID interfa
 			}
 		}
 
-		if len(pageIssues) < DefaultPageSize {
+		if isLastPage(resp, len(pageIssues)) {
 			break
 		}
 	}
