@@ -321,7 +321,7 @@ func countProtectedBranches(totalBranches int) int {
 func logProgress(verbose bool, current, total int, stat *models.RepositoryStats) {
 	if verbose {
 		fmt.Printf("\n[%d/%d] ✓ Scanned: %s/%s\n", current, total, stat.Namespace, stat.RepoName)
-		fmt.Printf("    Size: %.0f MB | LFS: %.0f MB | Commits: %d | Issues: %d | MRs: %d | Branches: %d | Tags: %d\n",
+		fmt.Printf("    Size: %.1f MB | LFS: %.1f MB | Commits: %d | Issues: %d | MRs: %d | Branches: %d | Tags: %d\n",
 			stat.RepoSizeMB, stat.LFSSizeMB, stat.CommitCount, stat.IssueCount, stat.MRCount, stat.BranchCount, stat.TagCount)
 	} else {
 		fmt.Printf("\r[%d/%d] Scanning projects... Current: %s/%s",

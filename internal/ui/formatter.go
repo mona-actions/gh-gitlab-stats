@@ -97,8 +97,8 @@ func convertToCSVRow(stat *models.RepositoryStats) []string {
 		boolToString(stat.IsEmpty),           // Is_Empty
 		boolToString(stat.IsFork),            // isFork
 		boolToString(stat.IsArchive),         // isArchive
-		fmt.Sprintf("%.0f", stat.RepoSizeMB), // Project_Size(mb) - no decimals
-		fmt.Sprintf("%.0f", stat.LFSSizeMB),  // LFS_Size(mb) - no decimals
+		fmt.Sprintf("%.1f", stat.RepoSizeMB), // Project_Size(mb)
+		fmt.Sprintf("%.1f", stat.LFSSizeMB),  // LFS_Size(mb)
 		fmt.Sprintf("%d", stat.CollaboratorCount),
 		fmt.Sprintf("%d", stat.ProtectedBranchCount),
 		fmt.Sprintf("%d", stat.MRReviewCount), // MR_Review_Count
