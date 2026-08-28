@@ -37,6 +37,7 @@ type ProjectStatistics struct {
 	TagCount                 int   `json:"tag_count,omitempty"`
 	MemberCount              int   `json:"member_count,omitempty"`
 	IssueCount               int   `json:"issue_count,omitempty"`
+	ProtectedBranchCount     int   `json:"protected_branch_count,omitempty"`
 	MergeRequestCount        int   `json:"merge_request_count,omitempty"`
 	MilestoneCount           int   `json:"milestone_count,omitempty"`
 	ReleaseCount             int   `json:"release_count,omitempty"`

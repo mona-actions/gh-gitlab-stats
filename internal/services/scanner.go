@@ -18,8 +18,6 @@ const (
 	DefaultWorkerCount = 5
 	// ProjectsPerPage is the number of projects to fetch per API request
 	ProjectsPerPage = 100
-	// ProtectedBranchRatio estimates that ~10% of non-default branches are protected
-	ProtectedBranchRatio = 10
 )
 
 // Scanner handles the scanning of GitLab repositories
@@ -273,7 +271,7 @@ func ConvertToRepoStats(project *api.Project, stats *api.ProjectStatistics) *mod
 		RepoSizeMB:           float64(stats.RepositorySize) / (1024 * 1024),
 		LFSSizeMB:            float64(stats.LFSObjectsSize) / (1024 * 1024),
 		CollaboratorCount:    stats.MemberCount,
-		ProtectedBranchCount: countProtectedBranches(stats.BranchCount),
+		ProtectedBranchCount: stats.ProtectedBranchCount,
 		MRReviewCount:        stats.MergeRequestReviewCount,
 		MilestoneCount:       stats.MilestoneCount,
 		IssueCount:           stats.IssueCount,
@@ -299,22 +297,6 @@ func extractNamespace(pathWithNamespace string) string {
 		return pathWithNamespace[:lastSlash]
 	}
 	return ""
-}
-
-// countProtectedBranches estimates protected branches (GitLab doesn't provide this directly)
-// Assumes main/master branch is protected + ProtectedBranchRatio% of other branches
-func countProtectedBranches(totalBranches int) int {
-	if totalBranches == 0 {
-		return 0
-	}
-	if totalBranches == 1 {
-		return 1
-	}
-	protected := 1 + (totalBranches-1)/ProtectedBranchRatio
-	if protected > totalBranches {
-		return totalBranches
-	}
-	return protected
 }
 
 // logProgress outputs progress information based on verbosity level

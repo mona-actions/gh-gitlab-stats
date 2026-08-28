@@ -551,6 +551,23 @@ func (c *RestClient) GetProjectStatistics(ctx context.Context, projectID interfa
 		log.Printf("Warning: Failed to get release count for project %v: %v", projectID, err)
 	}
 
+	// Get real protected-branch count from the /protected_branches endpoint
+	protectedBranchCount, err := c.getProtectedBranchCount(ctx, projectID)
+	if err == nil {
+		project.Statistics.ProtectedBranchCount = protectedBranchCount
+	} else {
+		log.Printf("Warning: Failed to get protected branch count for project %v: %v", projectID, err)
+	}
+
+	// Get issue count across all states, overriding the open-only value that
+	// convertRawProject derived from open_issues_count.
+	issueCount, err := c.getIssueCount(ctx, projectID)
+	if err == nil {
+		project.Statistics.IssueCount = issueCount
+	} else {
+		log.Printf("Warning: Failed to get issue count for project %v: %v; falling back to open-only issue count", projectID, err)
+	}
+
 	// Check if wiki actually has pages (only if wiki is enabled in settings)
 	if project.WikiEnabled {
 		project.Statistics.HasWikiPages = c.hasWikiPages(ctx, projectID)
@@ -712,6 +729,23 @@ func (c *RestClient) getReleaseCount(ctx context.Context, projectID interface{})
 	return c.countCollection(ctx, endpoint, nil)
 }
 
+// getProtectedBranchCount gets the real count of protected branches for a project.
+// The protected-branches list is small, so we count via full pagination directly
+// instead of countCollection to skip the wasted per_page=1 X-Total probe request.
+func (c *RestClient) getProtectedBranchCount(ctx context.Context, projectID interface{}) (int, error) {
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/protected_branches", encodedProjectID)
+	return c.countByPagination(ctx, endpoint, nil)
+}
+
+// getIssueCount gets the total count of issues (all states) for a project.
+// GitLab's issues list returns all states by default, so we pass no state filter.
+func (c *RestClient) getIssueCount(ctx context.Context, projectID interface{}) (int, error) {
+	encodedProjectID := c.encodeProjectID(projectID)
+	endpoint := fmt.Sprintf("/projects/%s/issues", encodedProjectID)
+	return c.countCollection(ctx, endpoint, nil)
+}
+
 // hasWikiPages checks if a project actually has wiki pages
 func (c *RestClient) hasWikiPages(ctx context.Context, projectID interface{}) bool {
 	params := url.Values{}
@@ -782,23 +816,7 @@ func (c *RestClient) getMergeRequestReviewCount(ctx context.Context, projectID i
 func (c *RestClient) getMergeRequestCommentCount(ctx context.Context, projectID interface{}) (int, error) {
 	// In GitLab, MR comments are called "notes" and include both regular comments and code review comments
 	// We need to get notes from the merge_requests endpoint
-	params := url.Values{}
-	params.Set("scope", "all")
-	params.Set("per_page", "1")
-	params.Set("page", "1")
-
 	encodedProjectID := c.encodeProjectID(projectID)
-	path := fmt.Sprintf("/projects/%s/merge_requests", encodedProjectID)
-	body, _, err := c.doRequest(ctx, "GET", path, params)
-	if err != nil {
-		return 0, err
-	}
-
-	// Parse merge requests to get their IDs, then count notes
-	var mrs []map[string]interface{}
-	if err := json.Unmarshal(body, &mrs); err != nil {
-		return 0, err
-	}
 
 	// For now, we'll use the user_notes_count field from MRs
 	// This requires fetching all MRs to sum up the notes
