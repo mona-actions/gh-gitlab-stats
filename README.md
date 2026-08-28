@@ -173,9 +173,9 @@ The tool generates CSV output with comprehensive GitLab project statistics:
 | `isArchive`               | Boolean   | Whether project is archived                  | API: `archived`                      |
 | `Project_Size(mb)`        | Number    | Repository size in megabytes                 | API: `statistics.repository_size`    |
 | `LFS_Size(mb)`            | Number    | Git LFS storage size in megabytes            | API: `statistics.lfs_objects_size`   |
-| `Collaborator_Count`      | Integer   | Number of project members                    | API: `/members/all` endpoint         |
+| `Collaborator_Count`      | Integer   | Number of project members (includes group-inherited members) | API: `/members/all` endpoint         |
 | `Protected_Branch_Count`  | Integer   | Number of protected branches (estimated)     | Computed from branch count           |
-| `MR_Review_Count`         | Integer   | Number of merge request reviews/approvals    | API: MR `upvotes` + `approved_by`    |
+| `MR_Review_Count`         | Integer   | Number of merge request approvals            | API: MR `approved_by`                |
 | `Milestone_Count`         | Integer   | Number of milestones                         | API: `/milestones` endpoint          |
 | `Issue_Count`             | Integer   | Number of issues (open)                      | API: `open_issues_count`             |
 | `MR_Count`                | Integer   | Number of merge requests (all states)        | API: `/merge_requests` endpoint      |
@@ -203,8 +203,8 @@ The tool generates CSV output with comprehensive GitLab project statistics:
 
 ```csv
 Namespace,Project,Is_Empty,isFork,isArchive,Project_Size(mb),LFS_Size(mb),Collaborator_Count,Protected_Branch_Count,MR_Review_Count,Milestone_Count,Issue_Count,MR_Count,MR_Review_Comment_Count,Commit_Count,Issue_Comment_Count,Release_Count,Branch_Count,Tag_Count,Has_Wiki,Full_URL,Created,Last_Push,Last_Update
-mygroup,awesome-project,false,false,false,250,1024,8,2,12,3,23,15,45,150,128,2,15,8,true,https://gitlab.com/mygroup/awesome-project,2023-01-15T10:00:00Z,2023-10-10T15:30:00Z,2023-10-10T15:30:00Z
-mygroup/subgroup,another-project,false,true,false,150,0,5,1,5,1,8,5,22,85,35,1,8,3,false,https://gitlab.com/mygroup/subgroup/another-project,2023-03-20T14:22:00Z,2023-10-09T08:15:00Z,2023-10-09T08:15:00Z
+mygroup,awesome-project,false,false,false,250.0,1024.0,8,2,12,3,23,15,45,150,128,2,15,8,true,https://gitlab.com/mygroup/awesome-project,2023-01-15T10:00:00Z,2023-10-10T15:30:00Z,2023-10-10T15:30:00Z
+mygroup/subgroup,another-project,false,true,false,150.0,0.0,5,1,5,1,8,5,22,85,35,1,8,3,false,https://gitlab.com/mygroup/subgroup/another-project,2023-03-20T14:22:00Z,2023-10-09T08:15:00Z,2023-10-09T08:15:00Z
 ```
 
 ## Examples
